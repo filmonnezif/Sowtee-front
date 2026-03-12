@@ -1,0 +1,165 @@
+{
+    "settings": {
+        "title": "الإعدادات",
+        "general": {
+            "title": "إعدادات عامة",
+            "interactionMode": "وضعية التفاعل",
+            "modes": {
+                "touch": "لمس",
+                "eyeGaze": "تتبع العين",
+                "switch": "مفتاح"
+            },
+            "eyeGaze": {
+                "title": "إعدادات تتبع العين",
+                "calibrated": "تمت المعايرة",
+                "notCalibrated": "غير معاير",
+                "calibrate": "معايرة",
+                "recalibrate": "إعادة معايرة",
+                "dwellTime": "زمن التثبيت",
+                "dwellHint": "مدة النظر للعبارة قبل الاختيار",
+                "openMode": "فتح وضع تتبع العين",
+                "tip": "في وضع تتبع العين، انظر إلى زوايا العبارات للاختيار. ثبت نظرك للتحدث."
+            },
+            "debug": "إظهار معلومات التصحيح"
+        },
+        "close": "إغلاق",
+        "language": "اللغة",
+        "appearance": {
+            "title": "المظهر",
+            "background": "الخلفية",
+            "accent": "اللون",
+            "text": "النص"
+        },
+        "sceneContext": {
+            "title": "سياق المشهد",
+            "placeholder": "سيتم التقاط المشهد عند التحدث",
+            "capture": "التقاط الآن",
+            "capturing": "جارِ الالتقاط...",
+            "recapture": "إعادة التقاط المشهد",
+            "analyzing": "جارِ تحليل المشهد...",
+            "failed": "فشل التحليل",
+            "captured": "تم التقاط المشهد"
+        },
+        "listening": {
+            "title": "الاستماع",
+            "start": "بدء",
+            "active": "نشط",
+            "lastHeard": "آخر ما سمع:",
+            "listeningPlaceholder": "انتظار الكلام...",
+            "enablePlaceholder": "تفعيل لسماع المحادثة"
+        },
+        "situation": {
+            "title": "الموقف",
+            "placeholder": "مثال: في هاكاثون أعرض تطبيقنا...",
+            "quickContexts": {
+                "hackathon": "هاكاثون",
+                "doctor": "طبيب",
+                "restaurant": "مطعم"
+            }
+        },
+        "colors": {
+            "default": "افتراضي",
+            "slate": "سليت",
+            "neutral": "محايد",
+            "gray": "رمادي",
+            "deepBlack": "أسود عميق",
+            "blue": "أزرق",
+            "yellow": "أصفر",
+            "red": "أحمر",
+            "green": "أخضر",
+            "purple": "أرجواني",
+            "white": "أبيض",
+            "amber": "كهرماني",
+            "sky": "سماوي"
+        }
+    },
+    "home": {
+        "skills": {
+            "speaking": {
+                "title": "تحدث",
+                "desc": "تواصل مدعوم بالذكاء الاصطناعي"
+            },
+            "email": {
+                "title": "بريد إلكتروني",
+                "desc": "قريباً"
+            },
+            "social": {
+                "title": "تواصل اجتماعي",
+                "desc": "قريباً"
+            }
+        },
+        "calibration": {
+            "title": "تتبع المؤشر بعينيك أثناء النقر على الأزرار",
+            "done": "تم"
+        },
+        "hint": "اضغط على مسافة أو إدخال للبدء"
+    },
+    "speaking": {
+        "actions": {
+            "backspace": "مسح",
+            "enter": "إدخال",
+            "loading": "جارِ التحميل..."
+        },
+        "placeholder": "اكتب اختصارات..."
+    },
+    "languages": {
+        "en": "الإنجليزية",
+        "ar": "العربية"
+    },
+    "profile": {
+        "title": "ملفي الشخصي",
+        "saved": "تم حفظ الملف!",
+        "save": "حفظ الملف",
+        "other": "أخرى",
+        "none": "لا شيء",
+        "sections": {
+            "personal": "معلومات شخصية",
+            "medical": "طبي",
+            "communication": "تفضيلات التواصل",
+            "dailyLife": "الحياة اليومية",
+            "notes": "ملاحظات"
+        },
+        "fields": {
+            "displayName": "الاسم",
+            "age": "العمر",
+            "location": "الموقع",
+            "condition": "الحالة",
+            "conditionStage": "المرحلة",
+            "primaryLanguage": "اللغة الأساسية",
+            "secondaryLanguage": "اللغة الثانوية",
+            "communicationStyle": "أسلوب التواصل",
+            "livingSituation": "وضع المعيشة",
+            "caregiverName": "اسم مقدم الرعاية",
+            "interests": "الاهتمامات",
+            "commonNeeds": "الاحتياجات الشائعة",
+            "dailyRoutine": "الروتين اليومي"
+        },
+        "placeholders": {
+            "displayName": "اسمك",
+            "location": "المدينة أو البلد",
+            "selectCondition": "اختر الحالة...",
+            "caregiverName": "اسم مقدم الرعاية الرئيسي",
+            "interests": "اكتب واضغط إدخال",
+            "commonNeeds": "اكتب واضغط إدخال",
+            "dailyRoutine": "صف يومك المعتاد...",
+            "notes": "أي شيء آخر يجب أن يعرفه المساعد..."
+        },
+        "stages": {
+            "early": "مبكرة",
+            "moderate": "متوسطة",
+            "advanced": "متقدمة"
+        },
+        "styles": {
+            "brief": "موجز",
+            "casual": "عادي",
+            "formal": "رسمي",
+            "detailed": "تفصيلي"
+        },
+        "living": {
+            "withFamily": "مع العائلة",
+            "careHome": "دار رعاية",
+            "independentAide": "مستقل مع مساعد",
+            "independent": "مستقل"
+        }
+    }
+}

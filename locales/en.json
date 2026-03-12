@@ -1,0 +1,165 @@
+{
+    "settings": {
+        "title": "Settings",
+        "general": {
+            "title": "General Settings",
+            "interactionMode": "Interaction Mode",
+            "modes": {
+                "touch": "Touch",
+                "eyeGaze": "Eye Gaze",
+                "switch": "Switch"
+            },
+            "eyeGaze": {
+                "title": "Eye Gaze Settings",
+                "calibrated": "Calibrated",
+                "notCalibrated": "Not Calibrated",
+                "calibrate": "Calibrate",
+                "recalibrate": "Recalibrate",
+                "dwellTime": "Dwell time",
+                "dwellHint": "How long to look at a phrase before selecting",
+                "openMode": "Open Eye Gaze Mode",
+                "tip": "In eye gaze mode, look at phrase zones in corners to select. Hold gaze to speak."
+            },
+            "debug": "Show debug info"
+        },
+        "close": "Close",
+        "language": "Language",
+        "appearance": {
+            "title": "Appearance",
+            "background": "Background",
+            "accent": "Accent",
+            "text": "Text"
+        },
+        "sceneContext": {
+            "title": "Scene Context",
+            "placeholder": "Scene will be captured when speaking",
+            "capture": "Capture Now",
+            "capturing": "Capturing...",
+            "recapture": "Recapture scene",
+            "analyzing": "Analyzing scene...",
+            "failed": "Analysis failed",
+            "captured": "Scene captured"
+        },
+        "listening": {
+            "title": "Listening",
+            "start": "Start",
+            "active": "Active",
+            "lastHeard": "Last heard:",
+            "listeningPlaceholder": "Listening for speech...",
+            "enablePlaceholder": "Enable to hear conversation"
+        },
+        "situation": {
+            "title": "Situation",
+            "placeholder": "E.g., At a hackathon presenting our AAC app...",
+            "quickContexts": {
+                "hackathon": "Hackathon",
+                "doctor": "Doctor",
+                "restaurant": "Restaurant"
+            }
+        },
+        "colors": {
+            "default": "Default",
+            "slate": "Slate",
+            "neutral": "Neutral",
+            "gray": "Gray",
+            "deepBlack": "Deep Black",
+            "blue": "Blue",
+            "yellow": "Yellow",
+            "red": "Red",
+            "green": "Green",
+            "purple": "Purple",
+            "white": "White",
+            "amber": "Amber",
+            "sky": "Sky"
+        }
+    },
+    "home": {
+        "skills": {
+            "speaking": {
+                "title": "Speaking",
+                "desc": "AI-powered communication"
+            },
+            "email": {
+                "title": "Email",
+                "desc": "Coming soon"
+            },
+            "social": {
+                "title": "Social",
+                "desc": "Coming soon"
+            }
+        },
+        "calibration": {
+            "title": "Follow the cursor with your eyes as you click buttons",
+            "done": "Done"
+        },
+        "hint": "Press Space or Enter to start"
+    },
+    "speaking": {
+        "actions": {
+            "backspace": "backspace",
+            "enter": "enter",
+            "loading": "loading..."
+        },
+        "placeholder": "Type abbreviations..."
+    },
+    "languages": {
+        "en": "English",
+        "ar": "Arabic"
+    },
+    "profile": {
+        "title": "My Profile",
+        "saved": "Profile saved!",
+        "save": "Save Profile",
+        "other": "Other",
+        "none": "None",
+        "sections": {
+            "personal": "Personal Info",
+            "medical": "Medical",
+            "communication": "Communication Preferences",
+            "dailyLife": "Daily Life",
+            "notes": "Notes"
+        },
+        "fields": {
+            "displayName": "Name",
+            "age": "Age",
+            "location": "Location",
+            "condition": "Condition",
+            "conditionStage": "Stage",
+            "primaryLanguage": "Primary Language",
+            "secondaryLanguage": "Secondary Language",
+            "communicationStyle": "Communication Style",
+            "livingSituation": "Living Situation",
+            "caregiverName": "Caregiver Name",
+            "interests": "Interests",
+            "commonNeeds": "Common Needs",
+            "dailyRoutine": "Daily Routine"
+        },
+        "placeholders": {
+            "displayName": "Your name",
+            "location": "City or country",
+            "selectCondition": "Select condition...",
+            "caregiverName": "Name of primary caregiver",
+            "interests": "Type and press Enter",
+            "commonNeeds": "Type and press Enter",
+            "dailyRoutine": "Describe your typical day...",
+            "notes": "Anything else the agent should know..."
+        },
+        "stages": {
+            "early": "Early",
+            "moderate": "Moderate",
+            "advanced": "Advanced"
+        },
+        "styles": {
+            "brief": "Brief",
+            "casual": "Casual",
+            "formal": "Formal",
+            "detailed": "Detailed"
+        },
+        "living": {
+            "withFamily": "With family",
+            "careHome": "Care home",
+            "independentAide": "Independent with aide",
+            "independent": "Independent"
+        }
+    }
+}

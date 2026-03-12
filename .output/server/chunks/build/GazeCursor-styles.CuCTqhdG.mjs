@@ -1,0 +1,8 @@
+const GazeCursor_vue_vue_type_style_index_0_scoped_421e4b6f_lang = ".gaze-dot[data-v-421e4b6f]{border-radius:9999px;border-width:2px;height:1rem;pointer-events:none;position:fixed;width:1rem;z-index:9999;--tw-border-opacity:1;background-color:#fffc;border-color:rgb(var(--aac-highlight)/var(--tw-border-opacity,1));box-shadow:0 0 10px rgb(var(--aac-highlight)/.5);transform:translate(-50%,-50%);transition:all .15s ease-out}.gaze-dot--on-target[data-v-421e4b6f]{background-color:rgb(var(--aac-highlight)/var(--tw-bg-opacity,1));border-color:rgb(255 255 255/var(--tw-border-opacity,1));box-shadow:0 0 20px rgb(var(--aac-highlight)/.7);height:1.25rem;width:1.25rem}.gaze-dot--on-target[data-v-421e4b6f],.gaze-dot--selecting[data-v-421e4b6f]{--tw-border-opacity:1;--tw-bg-opacity:1}.gaze-dot--selecting[data-v-421e4b6f]{animation:select-pulse-421e4b6f .3s ease-out;background-color:rgb(74 222 128/var(--tw-bg-opacity,1));border-color:rgb(134 239 172/var(--tw-border-opacity,1));box-shadow:0 0 30px #22c55ecc;height:1.5rem;width:1.5rem}@keyframes select-pulse-421e4b6f{0%{transform:translate(-50%,-50%) scale(1)}50%{transform:translate(-50%,-50%) scale(1.5)}to{transform:translate(-50%,-50%) scale(1)}}";
+
+const GazeCursorStyles_CuCTqhdG = [
+  GazeCursor_vue_vue_type_style_index_0_scoped_421e4b6f_lang
+];
+
+export { GazeCursorStyles_CuCTqhdG as default };
+//# sourceMappingURL=GazeCursor-styles.CuCTqhdG.mjs.map

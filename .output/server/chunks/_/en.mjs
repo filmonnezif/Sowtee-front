@@ -1,0 +1,188 @@
+var languages = {
+	en: "English",
+	ar: "Arabic",
+	ur: "Urdu"
+};
+var home = {
+	skills: {
+		speaking: {
+			title: "Speaking",
+			desc: "Type using letter cards and speak with AI-powered communication"
+		},
+		email: {
+			title: "Email",
+			desc: "Compose and send emails with assisted writing"
+		},
+		social: {
+			title: "Social Media",
+			desc: "Post and interact on social platforms"
+		}
+	},
+	hint: "Press Space or Enter to start speaking",
+	calibration: {
+		title: "Follow the cursor with your eyes as you click buttons",
+		done: "Done"
+	}
+};
+var speaking = {
+	placeholder: "Select letters to type...",
+	actions: {
+		backspace: "Back",
+		enter: "Expand",
+		loading: "Expanding..."
+	},
+	suggestions: {
+		speak: "Speak",
+		back: "Back",
+		hintCycle: "Gaze at Up/Down to cycle words",
+		hintActions: "Left back, Right speak"
+	}
+};
+var settings = {
+	title: "Settings",
+	close: "Close",
+	language: "Language",
+	general: {
+		title: "General",
+		interactionMode: "Interaction Mode",
+		modes: {
+			touch: "Touch",
+			eyeGaze: "Eye Gaze",
+			"switch": "Switch"
+		},
+		eyeGaze: {
+			title: "Eye Gaze Settings",
+			calibrated: "Calibrated",
+			notCalibrated: "Not Calibrated",
+			recalibrate: "Recalibrate",
+			calibrate: "Calibrate",
+			dwellTime: "Dwell Time",
+			dwellHint: "How long to look at a target before selecting it",
+			openMode: "Open Eye Gaze Mode",
+			tip: "Look at a target for the dwell time to select it. Blink to confirm."
+		},
+		debug: "Debug Info"
+	},
+	appearance: {
+		title: "Appearance",
+		background: "Background",
+		accent: "Accent",
+		text: "Text"
+	},
+	sceneContext: {
+		title: "Scene Context",
+		placeholder: "Scene will be captured when speaking",
+		capture: "Capture Now",
+		capturing: "Capturing...",
+		recapture: "Recapture scene",
+		analyzing: "Analyzing scene...",
+		failed: "Analysis failed",
+		captured: "Scene captured"
+	},
+	listening: {
+		title: "Listening",
+		start: "Start",
+		active: "Active",
+		lastHeard: "Last heard:",
+		listeningPlaceholder: "Listening for speech...",
+		enablePlaceholder: "Enable to hear conversation"
+	},
+	situation: {
+		title: "Situation",
+		placeholder: "E.g., At a hackathon presenting our AAC app...",
+		quickContexts: {
+			hackathon: "Hackathon",
+			doctor: "Doctor",
+			restaurant: "Restaurant"
+		}
+	},
+	cameras: {
+		title: "Cameras",
+		webgazer: "Eye Tracking Camera",
+		sceneCapture: "Scene Capture Camera",
+		"default": "Default Camera",
+		noCameras: "No cameras found",
+		available: "{count} cameras available"
+	},
+	colors: {
+		"default": "Default",
+		slate: "Slate",
+		neutral: "Neutral",
+		gray: "Gray",
+		deepBlack: "Deep Black",
+		blue: "Blue",
+		yellow: "Yellow",
+		red: "Red",
+		green: "Green",
+		purple: "Purple",
+		white: "White",
+		amber: "Amber",
+		sky: "Sky"
+	}
+};
+var profile = {
+	title: "My Profile",
+	saved: "Profile saved!",
+	save: "Save Profile",
+	other: "Other",
+	none: "None",
+	sections: {
+		personal: "Personal Info",
+		medical: "Medical",
+		communication: "Communication Preferences",
+		dailyLife: "Daily Life",
+		notes: "Notes"
+	},
+	fields: {
+		displayName: "Name",
+		age: "Age",
+		location: "Location",
+		condition: "Condition",
+		conditionStage: "Stage",
+		primaryLanguage: "Primary Language",
+		secondaryLanguage: "Secondary Language",
+		communicationStyle: "Communication Style",
+		livingSituation: "Living Situation",
+		caregiverName: "Caregiver Name",
+		interests: "Interests",
+		commonNeeds: "Common Needs",
+		dailyRoutine: "Daily Routine"
+	},
+	placeholders: {
+		displayName: "Your name",
+		location: "City or country",
+		selectCondition: "Select condition...",
+		caregiverName: "Name of primary caregiver",
+		interests: "Type and press Enter",
+		commonNeeds: "Type and press Enter",
+		dailyRoutine: "Describe your typical day...",
+		notes: "Anything else the agent should know..."
+	},
+	stages: {
+		early: "Early",
+		moderate: "Moderate",
+		advanced: "Advanced"
+	},
+	styles: {
+		brief: "Brief",
+		casual: "Casual",
+		formal: "Formal",
+		detailed: "Detailed"
+	},
+	living: {
+		withFamily: "With family",
+		careHome: "Care home",
+		independentAide: "Independent with aide",
+		independent: "Independent"
+	}
+};
+const en = {
+	languages: languages,
+	home: home,
+	speaking: speaking,
+	settings: settings,
+	profile: profile
+};
+
+export { en as default, home, languages, profile, settings, speaking };
+//# sourceMappingURL=en.mjs.map

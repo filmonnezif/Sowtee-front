@@ -1,0 +1,179 @@
+/* Import Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap');
+
+/* Import Keyboard Navigation Styles */
+@import './keyboard-navigation.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --aac-bg: 13 13 15;
+    --aac-surface: 21 21 24;
+    --aac-card: 28 28 33;
+    --aac-highlight: 59 130 246;
+    --aac-text: 245 245 247;
+  }
+
+  html {
+    @apply scroll-smooth;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-aac-bg text-aac-text antialiased;
+    overflow-x: hidden;
+  }
+
+  /* Smooth page transitions */
+  .page-enter-active,
+  .page-leave-active {
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  }
+
+  .page-enter-from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  .page-leave-to {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+
+  /* Focus styles for accessibility */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-blue-500 ring-offset-2 ring-offset-[#121214];
+  }
+}
+
+@layer components {
+
+  /* AAC Button - Large touch target with high contrast */
+  .aac-button {
+    @apply min-h-touch min-w-touch px-6 py-4 flex items-center justify-center text-aac-lg font-semibold bg-aac-card hover:bg-primary-600 border-2 border-primary-500 rounded-2xl transition-all duration-200 cursor-pointer select-none;
+  }
+
+  .aac-button:hover {
+    @apply transform scale-105;
+  }
+
+  .aac-button:active {
+    @apply transform scale-95;
+  }
+
+  .aac-button--selected {
+    @apply bg-aac-highlight border-aac-highlight;
+    animation: selection-glow 0.5s ease-in-out;
+  }
+
+  /* Eye-gaze focus indicator */
+  .aac-button--gaze-focus {
+    @apply ring-4 ring-accent-400 animate-gaze-pulse;
+  }
+
+  /* Phrase card for predictions */
+  .phrase-card {
+    @apply p-6 bg-aac-surface rounded-2xl border-2 border-aac-card flex flex-col gap-2 hover:border-primary-500 hover:bg-aac-card transition-all duration-300 cursor-pointer;
+  }
+
+  .phrase-card--primary {
+    @apply border-primary-400 bg-aac-card;
+  }
+
+  /* Camera preview */
+  .camera-preview {
+    @apply rounded-xl overflow-hidden border-2 border-aac-card;
+  }
+
+  /* Gaze indicator dot */
+  .gaze-indicator {
+    @apply fixed w-8 h-8 rounded-full bg-accent-500/50 pointer-events-none transform -translate-x-1/2 -translate-y-1/2 border-2 border-accent-400;
+    z-index: 9999;
+  }
+
+  /* Status badge */
+  .status-badge {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-sm font-medium;
+  }
+
+  .status-badge--active {
+    @apply bg-green-500/20 text-green-400;
+  }
+
+  .status-badge--inactive {
+    @apply bg-gray-500/20 text-gray-400;
+  }
+
+  .status-badge--processing {
+    @apply bg-primary-500/20 text-primary-400;
+  }
+}
+
+@layer utilities {
+
+  /* RTL support for Arabic */
+  .rtl {
+    direction: rtl;
+    text-align: right;
+  }
+
+  /* Hide scrollbar but keep functionality */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Eye gaze specific animations */
+  @keyframes gaze-pulse {
+
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+    }
+
+    50% {
+      box-shadow: 0 0 0 15px rgba(59, 130, 246, 0);
+    }
+  }
+
+  .animate-gaze-pulse {
+    animation: gaze-pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes selection-glow {
+    0% {
+      box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+    }
+
+    50% {
+      box-shadow: 0 0 30px 10px rgba(59, 130, 246, 0.3);
+    }
+
+    100% {
+      box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+    }
+  }
+
+  @keyframes zone-highlight {
+
+    0%,
+    100% {
+      transform: scale(1);
+    }
+
+    50% {
+      transform: scale(1.02);
+    }
+  }
+
+  .animate-zone-highlight {
+    animation: zone-highlight 0.5s ease-in-out;
+  }
+}

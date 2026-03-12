@@ -1,0 +1,22 @@
+{
+    "$schema": "https://lingo.dev/schema/i18n.json",
+    "version": "1.10",
+    "locale": {
+        "source": "en",
+        "targets": [
+            "ar"
+        ]
+    },
+    "buckets": {
+        "json": {
+            "include": [
+                "locales/[locale].json"
+            ]
+        }
+    },
+    "provider": {
+        "id": "openai",
+        "model": "gpt-4o-mini",
+        "prompt": "Translate the provided text from {source} to {target}. Preserve keys and structure."
+    }
+}
