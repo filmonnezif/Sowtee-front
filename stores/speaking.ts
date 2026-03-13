@@ -233,6 +233,8 @@ export const useSpeakingStore = defineStore('speaking', {
             const api = useApi()
             const appStore = useAppStore()
 
+            this.pushHistory()
+
             // Optimistic update
             if (this.typedText && !this.typedText.endsWith(' ')) {
                 this.typedText += ' '
@@ -245,7 +247,7 @@ export const useSpeakingStore = defineStore('speaking', {
                 })
 
                 if (response.typed_text !== undefined) {
-                    this.typedText = response.typed_text
+                    this.typedText = response.typed_text.toLowerCase()
                 }
             } catch (error) {
                 console.error('Add space failed:', error)

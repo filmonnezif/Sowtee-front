@@ -5,7 +5,7 @@
  * Layout: 5 cards at corners, text field in center with ghost text + suggestion chips.
  */
 
-import { ArrowLeft, Volume2, Undo2, Loader2, Plus, Settings } from 'lucide-vue-next'
+import { Volume2, Loader2, Plus, Delete, Space } from 'lucide-vue-next'
 const appStore = useAppStore()
 const speakingStore = useSpeakingStore()
 const api = useApi()
@@ -20,21 +20,32 @@ const { t } = useI18n()
 // Refs
 // Refs for gaze targets
 const cardRefs = ref<(HTMLElement | null)[]>([null, null, null, null, null])
-const undoRef = ref<HTMLElement | null>(null)
 const speakBtnRef = ref<HTMLElement | null>(null)
 const textFieldAutocompleteRef = ref<HTMLElement | null>(null)
-const backBtnRef = ref<HTMLElement | null>(null)
+const backspaceKeyRef = ref<HTMLElement | null>(null)
+const spaceKeyRef = ref<HTMLElement | null>(null)
 const suggestionChipRefs = ref<(HTMLElement | null)[]>([])
+const isMobile = ref(false)
 
 // Dwell state for eye gaze
 const dwellProgress = ref(0)
 const dwellTimeout = ref<number | null>(null)
 
+// Pressed animation state
+const pressedIndex = ref<number | null>(null)
+
+function triggerPress(index: number) {
+  pressedIndex.value = index
+  setTimeout(() => { pressedIndex.value = null }, 200)
+}
+
 // Initialize on mount
 onMounted(async () => {
+  updateViewportMode()
   speakingStore.reset()
   await initializeSpeakingSkill()
   window.addEventListener('keydown', handleKeyDown)
+  window.addEventListener('resize', updateViewportMode)
   
   // Initialize minimal navigation
   await nextTick()
@@ -162,27 +173,22 @@ watch(() => speakingStore.isExpanding, (isExpanding) => {
  * Setup minimal keyboard navigation
  */
 function setupMinimalNavigation() {
+  minimalNav.clearItems()
+
   // Register cards as navigable items
   cardRefs.value.forEach((el, index) => {
     if (el && currentItems.value[index]) {
       minimalNav.registerItem({
         id: `card-${index}`,
         element: el,
-        action: () => handleSelect(index),
+        action: () => {
+          triggerPress(index)
+          handleSelect(index)
+        },
         priority: 10 - index // Higher priority for earlier cards
       })
     }
   })
-  
-  // Register undo button
-  if (undoRef.value) {
-    minimalNav.registerItem({
-      id: 'undo',
-      element: undoRef.value,
-      action: () => speakingStore.undo(),
-      priority: 15
-    })
-  }
   
   // Register speak button
   if (speakBtnRef.value) {
@@ -194,15 +200,38 @@ function setupMinimalNavigation() {
     })
   }
   
-  // Register back button
-  if (backBtnRef.value) {
+  // Register backspace key (undo functionality)
+  if (backspaceKeyRef.value) {
     minimalNav.registerItem({
-      id: 'back-btn',
-      element: backBtnRef.value,
-      action: () => navigateTo('/'),
-      priority: 20 // Highest priority
+      id: 'backspace-key',
+      element: backspaceKeyRef.value,
+      action: () => handleUndo(),
+      priority: 14
     })
   }
+
+  // Register space key
+  if (spaceKeyRef.value) {
+    minimalNav.registerItem({
+      id: 'space-key',
+      element: spaceKeyRef.value,
+      action: () => speakingStore.addSpace(),
+      priority: 14
+    })
+  }
+
+  // Register predictive suggestion chips
+  suggestionChipRefs.value.forEach((el, index) => {
+    const suggestion = speakingStore.predictiveSuggestions[index]
+    if (el && suggestion) {
+      minimalNav.registerItem({
+        id: `suggestion-chip-${index}`,
+        element: el,
+        action: () => handleAcceptSuggestion(suggestion),
+        priority: 12 - index,
+      })
+    }
+  })
 }
 
 // Watch for suggestions panel to register navigation items
@@ -211,8 +240,27 @@ watch(() => speakingStore.showSuggestions, async (showSuggestions) => {
     await nextTick()
     setupSuggestionsNavigation()
   } else {
-    minimalNav.clearFocus()
+    await nextTick()
+    setupMinimalNavigation()
   }
+})
+
+// Keep card highlight synchronized with keyboard navigation focus
+watch(() => minimalNav.currentItem.value?.id, (itemId) => {
+  if (!itemId) {
+    speakingStore.setHighlightedIndex(null)
+    return
+  }
+
+  if (itemId.startsWith('card-')) {
+    const index = parseInt(itemId.replace('card-', ''))
+    if (!Number.isNaN(index)) {
+      speakingStore.setHighlightedIndex(index)
+      return
+    }
+  }
+
+  speakingStore.setHighlightedIndex(null)
 })
 
 /**
@@ -283,7 +331,7 @@ function setupSuggestionsNavigation() {
     })
   })
 }
-watch([cardRefs, undoRef, speakBtnRef, backBtnRef], () => {
+watch([cardRefs, speakBtnRef, backspaceKeyRef, spaceKeyRef], () => {
   if (minimalNav.navigableItems.value.length === 0) {
     nextTick(() => setupMinimalNavigation())
   }
@@ -298,6 +346,7 @@ watch(() => speakingStore.level, async () => {
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('click', handleCalibrationClick)
+  window.removeEventListener('resize', updateViewportMode)
   if (dwellTimeout.value) clearTimeout(dwellTimeout.value)
   // Stop listening for surrounding voices
   speech.stopListening()
@@ -308,6 +357,10 @@ onUnmounted(() => {
   minimalNav.clearFocus()
 })
 
+function updateViewportMode() {
+  isMobile.value = window.innerWidth <= 768
+}
+
 /**
  * Handle gaze selection of a target
  */
@@ -315,16 +368,16 @@ function handleGazeSelect(targetId: string) {
   if (targetId.startsWith('card-')) {
     const index = parseInt(targetId.replace('card-', ''))
     handleSelect(index)
-  } else if (targetId === 'undo') {
-    speakingStore.undo()
   } else if (targetId === 'speak-btn') {
     handleInlineSpeak()
   } else if (targetId === 'text-field-autocomplete') {
     handleAcceptGhostText()
   } else if (targetId === 'done-calibration') {
     completeCalibration()
-  } else if (targetId === 'back-btn') {
-    navigateTo('/')
+  } else if (targetId === 'backspace-key') {
+    handleUndo()
+  } else if (targetId === 'space-key') {
+    speakingStore.addSpace()
   } else if (targetId.startsWith('suggestion-chip-')) {
     const idx = parseInt(targetId.replace('suggestion-chip-', ''))
     if (speakingStore.predictiveSuggestions[idx]) {
@@ -397,12 +450,14 @@ function registerGazeTargets() {
     }
   })
   
-  // Register undo and speak with higher priority
-  if (undoRef.value) {
-    gazeController.registerTarget('undo', undoRef.value, 8)
-  }
+  // Register speak with higher priority
   if (speakBtnRef.value) {
     gazeController.registerTarget('speak-btn', speakBtnRef.value, 8)
+  }
+
+  // Register keyboard action keys
+  if (backspaceKeyRef.value) {
+    gazeController.registerTarget('backspace-key', backspaceKeyRef.value, 8)
   }
   
   // Register autocomplete zone on text field right half
@@ -410,9 +465,8 @@ function registerGazeTargets() {
     gazeController.registerTarget('text-field-autocomplete', textFieldAutocompleteRef.value, 7)
   }
   
-  // Register back button
-  if (backBtnRef.value) {
-    gazeController.registerTarget('back-btn', backBtnRef.value, 15) // High priority
+  if (spaceKeyRef.value) {
+    gazeController.registerTarget('space-key', spaceKeyRef.value, 8)
   }
   
   // Register suggestion chips as gaze targets
@@ -424,7 +478,7 @@ function registerGazeTargets() {
 }
 
 // Watch for card refs changes to re-register targets
-watch([cardRefs, undoRef, speakBtnRef, textFieldAutocompleteRef, backBtnRef, suggestionChipRefs], () => {
+watch([cardRefs, speakBtnRef, textFieldAutocompleteRef, backspaceKeyRef, spaceKeyRef, suggestionChipRefs], () => {
   if (gazeController.state.isActive) {
     registerGazeTargets()
   }
@@ -439,6 +493,11 @@ watch(() => speakingStore.predictiveSuggestions, async () => {
   if (gazeController.state.isActive) {
     await nextTick()
     registerGazeTargets()
+  }
+
+  if (!speakingStore.showSuggestions) {
+    await nextTick()
+    setupMinimalNavigation()
   }
 }, { deep: true })
 
@@ -526,7 +585,7 @@ function handleKeyDown(e: KeyboardEvent) {
   // Backspace / Ctrl+Z - undo
   if (e.code === 'Backspace' || (e.ctrlKey && e.key === 'z')) {
     e.preventDefault()
-    speakingStore.undo()
+    handleUndo()
     return
   }
   
@@ -700,8 +759,14 @@ async function handleSelect(index: number) {
           speakingStore.selectedCardIndex!
         )
       } else if (response.selected_letter) {
-        speakingStore.addLetter(response.selected_letter)
-        speakingStore.setTypedText(response.typed_text || speakingStore.typedText)
+        const selectedLetter = response.selected_letter.toLowerCase()
+        speakingStore.addLetter(selectedLetter)
+        speakingStore.setTypedText(
+          response.typed_text
+            ? response.typed_text.toLowerCase()
+            : speakingStore.typedText,
+          true,
+        )
         
         // Re-fetch cards
         await initializeSpeakingSkill()
@@ -900,7 +965,7 @@ const currentItems = computed(() => {
   } else {
     return speakingStore.spreadLetters.map(letter => ({
       index: letter.index,
-      label: letter.display,
+      label: letter.display.toUpperCase(),
       letters: [letter.letter],
     }))
   }
@@ -915,7 +980,7 @@ const displayTypedLetters = computed(() => {
 const displaySentence = computed(() => {
   const parts = []
   if (speakingStore.fullSentence) parts.push(speakingStore.fullSentence)
-  if (speakingStore.typedText) parts.push(speakingStore.typedText.split('').join(' ').toUpperCase())
+  if (speakingStore.typedText) parts.push(speakingStore.typedText.toLowerCase())
   return parts.join(' ')
 })
 
@@ -925,8 +990,24 @@ const hasAnySentenceText = computed(() => {
 })
 
 // Handle undo action (delegates to store)
-function handleUndo() {
+async function handleUndo() {
+  const before = speakingStore.typedText
   speakingStore.undo()
+  const after = speakingStore.typedText
+
+  const stepsToRewind = Math.max(0, before.length - after.length)
+  if (stepsToRewind === 0) return
+
+  try {
+    for (let i = 0; i < stepsToRewind; i++) {
+      await api.speakingAction({
+        user_id: appStore.userId,
+        action: 'backspace',
+      })
+    }
+  } catch (error) {
+    console.error('Undo backend sync failed:', error)
+  }
 }
 </script>
 
@@ -942,221 +1023,97 @@ function handleUndo() {
       :is-locked="gazeController.state.isLocked"
       :visible="appStore.interactionMode === 'eye_gaze' && gazeController.state.isActive"
     />
-    
-    <!-- Back button -->
-    <button 
-      ref="backBtnRef" 
-      class="back-btn navigable-item" 
-      :class="{ 'back-btn--gaze-active': gazeController.state.currentTargetId === 'back-btn' }"
-      @click="navigateTo('/')"
-    >
-      <ArrowLeft :size="32" />
-    </button>
-
-    <!-- Settings button -->
-    <button 
-      class="settings-btn"
-      :class="{ 'settings-btn--active': appStore.settingsExpanded }"
-      @click="appStore.toggleSettings()"
-    >
-      <Settings :size="20" />
-    </button>
-
-    <!-- Settings Sidebar -->
-    <Transition name="slide-settings">
-      <SettingsSidebar v-if="appStore.settingsExpanded" />
-    </Transition>
 
     <!-- Keyboard Navigation Hint -->
     <div v-if="!appStore.settingsExpanded && !speakingStore.showSuggestions" class="keyboard-nav-hint">
       Use arrow keys to navigate • Shift to click • Tab to cycle
     </div>
 
-    <!-- Main Grid Layout (always visible — no more full-screen overlay) -->
-    <div class="speaking-grid">
-        <!-- Top Row: Card 1 (left), Card 2 (center top), Card 3 (right) -->
-        <div class="card-top-left">
-          <button
-            v-if="currentItems[0]"
-            :ref="(el) => cardRefs[0] = el as HTMLElement"
-            class="letter-card navigable-item"
-            :class="{ 
-              'letter-card--highlighted': speakingStore.highlightedIndex === 0,
-              'letter-card--gaze-active': gazeController.state.currentTargetId === 'card-0'
-            }"
-            @click="handleSelect(0)"
-            @mouseenter="speakingStore.setHighlightedIndex(0)"
-          >
-
-            <span class="letter-card__text">{{ currentItems[0].label }}</span>
-          </button>
-        </div>
-        
-        <div class="card-top-center">
-          <button
-            v-if="currentItems[1]"
-            :ref="(el) => cardRefs[1] = el as HTMLElement"
-            class="letter-card letter-card--top navigable-item"
-            :class="{ 
-              'letter-card--highlighted': speakingStore.highlightedIndex === 1,
-              'letter-card--gaze-active': gazeController.state.currentTargetId === 'card-1'
-            }"
-            @click="handleSelect(1)"
-            @mouseenter="speakingStore.setHighlightedIndex(1)"
-          >
-
-            <span class="letter-card__text">{{ currentItems[1].label }}</span>
-          </button>
-        </div>
-        
-        <div class="card-top-right">
-          <button
-            v-if="currentItems[2]"
-            :ref="(el) => cardRefs[2] = el as HTMLElement"
-            class="letter-card navigable-item"
-            :class="{ 
-              'letter-card--highlighted': speakingStore.highlightedIndex === 2,
-              'letter-card--gaze-active': gazeController.state.currentTargetId === 'card-2'
-            }"
-            @click="handleSelect(2)"
-            @mouseenter="speakingStore.setHighlightedIndex(2)"
-          >
-
-            <span class="letter-card__text">{{ currentItems[2].label }}</span>
-          </button>
-        </div>
-
-        <!-- Middle Row: [Undo] — [Text Field] — [Speak] -->
-        <div class="input-row">
-          <!-- Left action: Undo -->
-          <div class="input-row__left-actions">
-            <button 
-              ref="undoRef"
-              class="action-btn action-btn--undo navigable-item"
-              :class="{ 'action-btn--gaze-active': gazeController.state.currentTargetId === 'undo' }"
-              :disabled="!speakingStore.canUndo"
-              @click="handleUndo"
-            >
-              <Undo2 :size="24" />
-              <span>Undo</span>
-            </button>
-          </div>
-          
-          <!-- Center: Text field (with integrated autocomplete zone) + suggestion chips -->
-          <div class="text-field-group">
-            <div class="text-field">
-              <div class="text-field__inner">
-                <span v-if="displaySentence" class="text-field__content">
-                  {{ displaySentence }}
-                </span>
-                <span v-if="speakingStore.predictiveGhostText && !displaySentence" class="text-field__ghost">
-                  {{ speakingStore.predictiveGhostText }}
-                </span>
-                <span v-else-if="speakingStore.predictiveGhostText && displaySentence" class="text-field__ghost">
-                  {{ ' ' + speakingStore.predictiveGhostText.slice(displaySentence.length).trim() }}
-                </span>
-                <span v-if="!displaySentence && !speakingStore.predictiveGhostText" class="text-field__placeholder">
-                  {{ t('speaking.placeholder') }}
-                </span>
-              </div>
-              <span class="text-field__cursor" />
-              <!-- Autocomplete gaze zone (right half of text field) -->
-              <div 
-                ref="textFieldAutocompleteRef"
-                class="text-field__autocomplete-zone"
-                :class="{ 
-                  'text-field__autocomplete-zone--active': gazeController.state.currentTargetId === 'text-field-autocomplete',
-                  'text-field__autocomplete-zone--available': !!speakingStore.predictiveGhostText
-                }"
-                @click="handleAcceptGhostText"
-              >
-                <span v-if="speakingStore.predictiveGhostText" class="text-field__autocomplete-hint">✓</span>
-              </div>
+    <div class="speaking-layout">
+      <div class="top-panel">
+        <div class="text-field-group">
+          <div class="text-field">
+            <div class="text-field__inner">
+              <span v-if="displaySentence" class="text-field__content">
+                {{ displaySentence }}
+              </span>
+              <span v-if="speakingStore.predictiveGhostText && !displaySentence" class="text-field__ghost">
+                {{ speakingStore.predictiveGhostText }}
+              </span>
+              <span v-else-if="speakingStore.predictiveGhostText && displaySentence" class="text-field__ghost">
+                {{ ' ' + speakingStore.predictiveGhostText.slice(displaySentence.length).trim() }}
+              </span>
+              <span v-if="!displaySentence && !speakingStore.predictiveGhostText" class="text-field__placeholder">
+                {{ t('speaking.placeholder') }}
+              </span>
             </div>
-
-            <!-- Suggestion Chips Bar -->
-            <div v-if="speakingStore.predictiveSuggestions.length > 0" class="suggestion-chips">
-              <button
-                v-for="(suggestion, idx) in speakingStore.predictiveSuggestions.slice(0, 3)"
-                :key="idx"
-                :ref="(el) => { if (suggestionChipRefs) suggestionChipRefs[idx] = el as HTMLElement }"
-                class="suggestion-chip"
-                :class="{ 
-                  'suggestion-chip--completion': suggestion.is_completion,
-                  'suggestion-chip--gaze-active': gazeController.state.currentTargetId === `suggestion-chip-${idx}`
-                }"
-                @click="handleAcceptSuggestion(suggestion)"
-              >
-                {{ suggestion.text }}
-              </button>
-              <Loader2 v-if="speakingStore.isFetchingSuggestions" :size="24" class="animate-spin suggestion-chips__loader" />
-            </div>
-            <div v-else-if="speakingStore.isFetchingSuggestions" class="suggestion-chips suggestion-chips--loading">
-              <Loader2 :size="24" class="animate-spin suggestion-chips__loader" />
-              <span class="suggestion-chips__hint">Thinking...</span>
-            </div>
-
-          </div>
-          
-          <!-- Right action: Speak -->
-          <div class="input-row__right-actions">
-            <button 
-              ref="speakBtnRef"
-              class="action-btn action-btn--speak navigable-item"
-              :class="{ 
-                'action-btn--loading': speakingStore.isSpeaking,
-                'action-btn--gaze-active': gazeController.state.currentTargetId === 'speak-btn'
+            <span class="text-field__cursor" />
+            <div
+              ref="textFieldAutocompleteRef"
+              class="text-field__autocomplete-zone"
+              :class="{
+                'text-field__autocomplete-zone--active': gazeController.state.currentTargetId === 'text-field-autocomplete',
+                'text-field__autocomplete-zone--available': !!speakingStore.predictiveGhostText
               }"
-              :disabled="!hasAnySentenceText || speakingStore.isSpeaking"
-              @click="handleInlineSpeak"
+              @click="handleAcceptGhostText"
             >
-              <Loader2 v-if="speakingStore.isSpeaking" :size="24" class="animate-spin" />
-              <Volume2 v-else :size="24" />
-              <span>Speak</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- Bottom Row: Card 4 (left), Context Panel (center), Card 5 (right) -->
-        <div class="card-bottom-left">
-          <button
-            v-if="currentItems[3]"
-            :ref="(el) => cardRefs[3] = el as HTMLElement"
-            class="letter-card navigable-item"
-            :class="{ 
-              'letter-card--highlighted': speakingStore.highlightedIndex === 3,
-              'letter-card--gaze-active': gazeController.state.currentTargetId === 'card-3'
-            }"
-            @click="handleSelect(3)"
-            @mouseenter="speakingStore.setHighlightedIndex(3)"
-          >
-
-            <span class="letter-card__text">{{ currentItems[3].label }}</span>
-          </button>
-        </div>
-        
-        <div class="context-bottom">
-          <!-- Scene Preview with Recapture Button -->
-          <div class="scene-container">
-            <div 
-              class="scene-box"
-            >
-              <img
-                v-if="appStore.capturedSceneImage"
-                :src="appStore.capturedSceneImage"
-                class="scene-box__image"
-                alt="Captured scene"
-              />
-              <div v-else class="scene-box__placeholder">
-                <Plus :size="24" />
-              </div>
+              <span v-if="speakingStore.predictiveGhostText" class="text-field__autocomplete-hint">✓</span>
             </div>
           </div>
-          
-          <!-- Conversation History -->
-          <div class="conversation-box">
-            <div 
-              v-for="(turn, index) in conversationHistory.slice(-2)"
+
+          <div v-if="speakingStore.predictiveSuggestions.length > 0" class="suggestion-chips">
+            <button
+              v-for="(suggestion, idx) in speakingStore.predictiveSuggestions.slice(0, 3)"
+              :key="idx"
+              :ref="(el) => { if (suggestionChipRefs) suggestionChipRefs[idx] = el as HTMLElement }"
+              class="suggestion-chip"
+              :class="{
+                'suggestion-chip--completion': suggestion.is_completion,
+                'suggestion-chip--gaze-active': gazeController.state.currentTargetId === `suggestion-chip-${idx}`
+              }"
+              @click="handleAcceptSuggestion(suggestion)"
+            >
+              {{ suggestion.text }}
+            </button>
+            <Loader2 v-if="speakingStore.isFetchingSuggestions" :size="24" class="animate-spin suggestion-chips__loader" />
+          </div>
+          <div v-else-if="speakingStore.isFetchingSuggestions" class="suggestion-chips suggestion-chips--loading">
+            <Loader2 :size="24" class="animate-spin suggestion-chips__loader" />
+            <span class="suggestion-chips__hint">Thinking...</span>
+          </div>
+        </div>
+
+        <button
+          ref="speakBtnRef"
+          class="action-btn action-btn--speak action-btn--inline navigable-item"
+          :class="{
+            'action-btn--loading': speakingStore.isSpeaking,
+            'action-btn--gaze-active': gazeController.state.currentTargetId === 'speak-btn'
+          }"
+          :disabled="!hasAnySentenceText || speakingStore.isSpeaking"
+          @click="handleInlineSpeak"
+        >
+          <Loader2 v-if="speakingStore.isSpeaking" :size="24" class="animate-spin" />
+          <Volume2 v-else :size="24" />
+          <span>Speak</span>
+        </button>
+
+        <div class="context-compact context-compact--hidden">
+          <div class="scene-box scene-box--hidden">
+            <img
+              v-if="appStore.capturedSceneImage"
+              :src="appStore.capturedSceneImage"
+              class="scene-box__image"
+              alt="Captured scene"
+            />
+            <div v-else class="scene-box__placeholder">
+              <Plus :size="24" />
+            </div>
+          </div>
+
+          <div class="conversation-box conversation-box--scrollable conversation-box--hidden">
+            <div
+              v-for="(turn, index) in conversationHistory"
               :key="index"
               class="conversation-turn"
               :class="`conversation-turn--${turn.speaker}`"
@@ -1169,23 +1126,211 @@ function handleUndo() {
             </div>
           </div>
         </div>
-        
-        <div class="card-bottom-right">
+      </div>
+
+      <div v-if="!isMobile" class="keyboard-section">
+        <div class="keyboard-row keyboard-row--top">
+          <button
+            v-if="currentItems[0]"
+            :ref="(el) => cardRefs[0] = el as HTMLElement"
+            class="letter-card letter-card--inset-left navigable-item"
+            :class="{
+              'letter-card--highlighted': speakingStore.highlightedIndex === 0,
+              'letter-card--gaze-active': gazeController.state.currentTargetId === 'card-0',
+              'letter-card--pressed': pressedIndex === 0
+            }"
+            @click="triggerPress(0); handleSelect(0)"
+            @mouseenter="speakingStore.setHighlightedIndex(0)"
+          >
+            <span class="letter-card__text">{{ currentItems[0].label }}</span>
+          </button>
+
+          <button
+            v-if="currentItems[1]"
+            :ref="(el) => cardRefs[1] = el as HTMLElement"
+            class="letter-card navigable-item"
+            :class="{
+              'letter-card--highlighted': speakingStore.highlightedIndex === 1,
+              'letter-card--gaze-active': gazeController.state.currentTargetId === 'card-1',
+              'letter-card--pressed': pressedIndex === 1
+            }"
+            @click="triggerPress(1); handleSelect(1)"
+            @mouseenter="speakingStore.setHighlightedIndex(1)"
+          >
+            <span class="letter-card__text">{{ currentItems[1].label }}</span>
+          </button>
+
+          <button
+            v-if="currentItems[2]"
+            :ref="(el) => cardRefs[2] = el as HTMLElement"
+            class="letter-card letter-card--inset-right navigable-item"
+            :class="{
+              'letter-card--highlighted': speakingStore.highlightedIndex === 2,
+              'letter-card--gaze-active': gazeController.state.currentTargetId === 'card-2',
+              'letter-card--pressed': pressedIndex === 2
+            }"
+            @click="triggerPress(2); handleSelect(2)"
+            @mouseenter="speakingStore.setHighlightedIndex(2)"
+          >
+            <span class="letter-card__text">{{ currentItems[2].label }}</span>
+          </button>
+        </div>
+
+        <div class="keyboard-row keyboard-row--bottom">
+          <button
+            ref="backspaceKeyRef"
+            class="letter-card key-card key-card--backspace navigable-item"
+            :class="{ 'letter-card--gaze-active': gazeController.state.currentTargetId === 'backspace-key' }"
+            :disabled="!speakingStore.canUndo"
+            @click="handleUndo"
+          >
+            <Delete :size="36" class="key-card__icon" />
+          </button>
+
+          <button
+            v-if="currentItems[3]"
+            :ref="(el) => cardRefs[3] = el as HTMLElement"
+            class="letter-card navigable-item"
+            :class="{
+              'letter-card--highlighted': speakingStore.highlightedIndex === 3,
+              'letter-card--gaze-active': gazeController.state.currentTargetId === 'card-3',
+              'letter-card--pressed': pressedIndex === 3
+            }"
+            @click="triggerPress(3); handleSelect(3)"
+            @mouseenter="speakingStore.setHighlightedIndex(3)"
+          >
+            <span class="letter-card__text">{{ currentItems[3].label }}</span>
+          </button>
+
           <button
             v-if="currentItems[4]"
             :ref="(el) => cardRefs[4] = el as HTMLElement"
             class="letter-card navigable-item"
-            :class="{ 
+            :class="{
               'letter-card--highlighted': speakingStore.highlightedIndex === 4,
-              'letter-card--gaze-active': gazeController.state.currentTargetId === 'card-4'
+              'letter-card--gaze-active': gazeController.state.currentTargetId === 'card-4',
+              'letter-card--pressed': pressedIndex === 4
             }"
-            @click="handleSelect(4)"
+            @click="triggerPress(4); handleSelect(4)"
             @mouseenter="speakingStore.setHighlightedIndex(4)"
           >
-
             <span class="letter-card__text">{{ currentItems[4].label }}</span>
           </button>
+
+          <button
+            ref="spaceKeyRef"
+            class="letter-card key-card key-card--space navigable-item"
+            :class="{ 'letter-card--gaze-active': gazeController.state.currentTargetId === 'space-key' }"
+            @click="speakingStore.addSpace()"
+          >
+            <Space :size="40" class="key-card__icon" />
+          </button>
         </div>
+      </div>
+
+      <div v-else class="keyboard-section keyboard-section--mobile">
+        <div class="keyboard-split-mobile">
+          <div class="keyboard-stack-mobile">
+            <button
+              v-if="currentItems[0]"
+              :ref="(el) => cardRefs[0] = el as HTMLElement"
+              class="letter-card navigable-item"
+              :class="{
+                'letter-card--highlighted': speakingStore.highlightedIndex === 0,
+                'letter-card--gaze-active': gazeController.state.currentTargetId === 'card-0',
+                'letter-card--pressed': pressedIndex === 0
+              }"
+              @click="triggerPress(0); handleSelect(0)"
+              @mouseenter="speakingStore.setHighlightedIndex(0)"
+            >
+              <span class="letter-card__text">{{ currentItems[0].label }}</span>
+            </button>
+
+            <button
+              v-if="currentItems[2]"
+              :ref="(el) => cardRefs[2] = el as HTMLElement"
+              class="letter-card navigable-item"
+              :class="{
+                'letter-card--highlighted': speakingStore.highlightedIndex === 2,
+                'letter-card--gaze-active': gazeController.state.currentTargetId === 'card-2',
+                'letter-card--pressed': pressedIndex === 2
+              }"
+              @click="triggerPress(2); handleSelect(2)"
+              @mouseenter="speakingStore.setHighlightedIndex(2)"
+            >
+              <span class="letter-card__text">{{ currentItems[2].label }}</span>
+            </button>
+          </div>
+
+          <div class="keyboard-stack-mobile">
+            <button
+              v-if="currentItems[1]"
+              :ref="(el) => cardRefs[1] = el as HTMLElement"
+              class="letter-card navigable-item"
+              :class="{
+                'letter-card--highlighted': speakingStore.highlightedIndex === 1,
+                'letter-card--gaze-active': gazeController.state.currentTargetId === 'card-1',
+                'letter-card--pressed': pressedIndex === 1
+              }"
+              @click="triggerPress(1); handleSelect(1)"
+              @mouseenter="speakingStore.setHighlightedIndex(1)"
+            >
+              <span class="letter-card__text">{{ currentItems[1].label }}</span>
+            </button>
+
+            <button
+              v-if="currentItems[3]"
+              :ref="(el) => cardRefs[3] = el as HTMLElement"
+              class="letter-card navigable-item"
+              :class="{
+                'letter-card--highlighted': speakingStore.highlightedIndex === 3,
+                'letter-card--gaze-active': gazeController.state.currentTargetId === 'card-3',
+                'letter-card--pressed': pressedIndex === 3
+              }"
+              @click="triggerPress(3); handleSelect(3)"
+              @mouseenter="speakingStore.setHighlightedIndex(3)"
+            >
+              <span class="letter-card__text">{{ currentItems[3].label }}</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="keyboard-mobile-actions">
+          <button
+            v-if="currentItems[4]"
+            :ref="(el) => cardRefs[4] = el as HTMLElement"
+            class="letter-card navigable-item"
+            :class="{
+              'letter-card--highlighted': speakingStore.highlightedIndex === 4,
+              'letter-card--gaze-active': gazeController.state.currentTargetId === 'card-4',
+              'letter-card--pressed': pressedIndex === 4
+            }"
+            @click="triggerPress(4); handleSelect(4)"
+            @mouseenter="speakingStore.setHighlightedIndex(4)"
+          >
+            <span class="letter-card__text">{{ currentItems[4].label }}</span>
+          </button>
+
+          <button
+            ref="backspaceKeyRef"
+            class="letter-card key-card key-card--backspace navigable-item"
+            :class="{ 'letter-card--gaze-active': gazeController.state.currentTargetId === 'backspace-key' }"
+            :disabled="!speakingStore.canUndo"
+            @click="handleUndo"
+          >
+            <Delete :size="36" class="key-card__icon" />
+          </button>
+        </div>
+
+        <button
+          ref="spaceKeyRef"
+          class="letter-card key-card key-card--space key-card--space-mobile navigable-item"
+          :class="{ 'letter-card--gaze-active': gazeController.state.currentTargetId === 'space-key' }"
+          @click="speakingStore.addSpace()"
+        >
+          <Space :size="40" class="key-card__icon" />
+        </button>
+      </div>
       </div>
     
     <!-- Calibration Controls -->
@@ -1222,124 +1367,223 @@ function handleUndo() {
 <style scoped>
 /* Speaking Page - Dark Theme with Grid Layout */
 .speaking-page {
-  @apply min-h-screen bg-aac-bg;
-  @apply relative overflow-hidden;
+  @apply h-[100dvh] min-h-[100dvh] bg-aac-bg;
+  @apply relative overflow-x-hidden overflow-y-auto;
+  @apply px-12 pb-14 pt-20;
+  @apply box-border;
 }
 
-/* Back Button */
-.back-btn {
-  @apply fixed top-1/2 -translate-y-1/2 left-8 z-50;
-  @apply w-20 h-20 rounded-2xl;
-  @apply bg-aac-card text-aac-muted;
-  @apply flex items-center justify-center;
-  @apply transition-all duration-200;
-  @apply hover:bg-aac-surface hover:text-aac-text;
-  @apply border border-aac-surface;
+/* Main keyboard-style layout */
+.speaking-layout {
+  @apply min-h-full w-full;
+  @apply flex flex-col gap-6;
+  @apply overflow-visible;
 }
 
-.back-btn--gaze-active {
-  @apply border-aac-highlight scale-110;
-  background-color: rgb(var(--aac-highlight) / 0.2);
-  box-shadow: 0 0 25px rgb(var(--aac-highlight) / 0.4);
+.top-panel {
+  @apply flex items-start gap-6;
+  flex: 0 0 auto;
+  min-height: 0;
+  @apply overflow-visible;
 }
 
-/* Settings Button */
-.settings-btn {
-  @apply fixed top-6 right-6 z-50;
-  @apply w-12 h-12 rounded-xl;
-  @apply bg-aac-card text-aac-muted;
-  @apply flex items-center justify-center;
-  @apply transition-all duration-200;
-  @apply hover:bg-aac-surface hover:text-aac-text;
-  @apply border border-aac-surface;
+.keyboard-section {
+  flex: 1 1 auto;
+  min-height: 0;
+  @apply flex flex-col justify-center gap-8;
+  @apply overflow-visible;
 }
 
-.settings-btn--active {
-  @apply bg-aac-highlight text-white border-aac-highlight;
+.keyboard-row {
+  @apply flex items-center w-full px-10;
+  @apply justify-between gap-10;
 }
 
-/* (Suggestions overlay removed — using inline chips instead) */
-.speaking-grid {
-  @apply h-screen w-screen;
-  @apply grid;
-  grid-template-columns: 1fr 2fr 1fr;
-  grid-template-rows: 1fr auto 1fr;
-  @apply p-8 gap-6;
+.keyboard-row--top {
+  @apply pb-1;
 }
 
-/* Card Positions - pushed to edges to maximize center space */
-.card-top-left {
-  @apply flex items-start justify-start;
-  @apply pt-2;
-  padding-left: 4%;
-}
-
-.card-top-center {
-  @apply flex items-start justify-center;
-  @apply pt-2;
-}
-
-.card-top-right {
-  @apply flex items-start justify-end;
-  @apply pt-2;
-  padding-right: 4%;
-}
-
-.card-bottom-left {
-  @apply flex items-end justify-start;
+.keyboard-row--bottom {
   @apply pb-2;
-  padding-left: 4%;
 }
 
-.card-bottom-right {
-  @apply flex items-end justify-end;
-  @apply pb-2;
-  padding-right: 4%;
-}
-
-/* Letter Card */
+/* Letter Card - 3D Keyboard Key Style */
 .letter-card {
-  @apply w-64 h-44;
-  @apply bg-aac-card rounded-2xl;
-  @apply border-2 border-aac-surface;
+  @apply w-72 h-44;
+  @apply rounded-2xl;
   @apply flex items-center justify-center;
   @apply cursor-pointer;
-  @apply transition-all duration-200;
   @apply relative overflow-hidden;
+  @apply select-none;
+
+  /* 3D keyboard key appearance */
+  background: linear-gradient(
+    180deg,
+    rgb(var(--aac-surface) / 1) 0%,
+    rgb(var(--aac-card) / 1) 100%
+  );
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-bottom: none;
+
+  /* Multi-layer shadow for 3D depth */
+  box-shadow:
+    /* Bottom "side" of the key */
+    0 6px 0 0 rgb(0 0 0 / 0.45),
+    /* Soft outer glow */
+    0 8px 16px rgb(255 255 255 / 0.12),
+    /* Inner top highlight (light hitting the top face) */
+    inset 0 1px 0 rgb(255 255 255 / 0.08);
+
+  /* Transition for smooth press */
+  transition: transform 0.08s cubic-bezier(0.25, 0.1, 0.25, 1),
+              box-shadow 0.08s cubic-bezier(0.25, 0.1, 0.25, 1),
+              background 0.2s ease,
+              border-color 0.2s ease;
+  transform: translateY(0);
+}
+
+.letter-card--inset-left {
+  margin-left: clamp(72px, 8vw, 120px);
+}
+
+.letter-card--inset-right {
+  margin-right: clamp(72px, 8vw, 120px);
+}
+
+/* Pressed state (mouse down / tap) */
+.letter-card:active {
+  transform: translateY(5px);
+  box-shadow:
+    0 1px 0 0 rgb(0 0 0 / 0.45),
+    0 2px 4px rgb(255 255 255 / 0.08),
+    inset 0 1px 0 rgb(255 255 255 / 0.05);
+}
+
+/* Click animation class (added via JS on click) */
+.letter-card--pressed {
+  animation: keypress 0.18s ease-out;
+}
+
+@keyframes keypress {
+  0%   { transform: translateY(0); }
+  40%  { transform: translateY(5px); }
+  70%  { transform: translateY(-1px); }
+  100% { transform: translateY(0); }
 }
 
 .letter-card:hover {
-  @apply bg-aac-surface;
-  border-color: rgb(var(--aac-highlight) / 0.5);
-  @apply scale-105;
+  background: linear-gradient(
+    180deg,
+    rgb(var(--aac-highlight) / 0.12) 0%,
+    rgb(var(--aac-surface) / 1) 100%
+  );
+  border-color: rgb(var(--aac-highlight) / 0.35);
+  box-shadow:
+    0 6px 0 0 rgb(var(--aac-highlight) / 0.25),
+    0 8px 20px rgb(255 255 255 / 0.14),
+    inset 0 1px 0 rgb(255 255 255 / 0.1);
 }
 
 .letter-card--highlighted {
+  background: linear-gradient(
+    180deg,
+    rgb(var(--aac-highlight) / 0.12) 0%,
+    rgb(var(--aac-surface) / 1) 100%
+  );
+  border-color: rgb(var(--aac-highlight) / 0.35);
+  box-shadow:
+    0 6px 0 0 rgb(var(--aac-highlight) / 0.25),
+    0 8px 20px rgb(255 255 255 / 0.14),
+    inset 0 1px 0 rgb(255 255 255 / 0.1);
+}
+
+.letter-card.keyboard-nav-highlighted {
+  animation: none;
+  border-width: 1px;
+  transform: translateY(0);
+  filter: none;
+  background: linear-gradient(
+    180deg,
+    rgb(var(--aac-highlight) / 0.12) 0%,
+    rgb(var(--aac-surface) / 1) 100%
+  );
+  border-color: rgb(var(--aac-highlight) / 0.35);
+  box-shadow:
+    0 6px 0 0 rgb(var(--aac-highlight) / 0.25),
+    0 8px 20px rgb(255 255 255 / 0.14),
+    inset 0 1px 0 rgb(255 255 255 / 0.1);
+}
+
+.suggestion-chip.keyboard-nav-highlighted {
+  animation: none;
+  border-width: 2px;
+  transform: none;
+  filter: none;
   @apply border-aac-highlight;
-  background-color: rgb(var(--aac-highlight) / 0.1);
-  box-shadow: 0 0 0 2px rgb(var(--aac-highlight) / 0.3);
+  background-color: rgb(var(--aac-highlight) / 0.15);
+}
+
+.suggestion-chip.keyboard-nav-highlighted:hover {
   @apply scale-105;
 }
 
-.letter-card--top {
-  @apply border-aac-highlight;
+.letter-card--highlighted .letter-card__text,
+.letter-card.keyboard-nav-highlighted .letter-card__text {
+  @apply text-aac-text;
+}
+
+.letter-card--highlighted.letter-card--gaze-active {
+  border-color: rgb(var(--aac-highlight) / 0.6);
+  background: linear-gradient(
+    180deg,
+    rgb(var(--aac-highlight) / 0.15) 0%,
+    rgb(var(--aac-card) / 1) 100%
+  );
+  box-shadow:
+    0 6px 0 0 rgb(var(--aac-highlight) / 0.3),
+    0 8px 20px rgb(255 255 255 / 0.16),
+    0 0 0 2px rgb(var(--aac-highlight) / 0.2),
+    inset 0 1px 0 rgb(255 255 255 / 0.1);
 }
 
 .letter-card__text {
-  @apply text-5xl font-extrabold text-aac-text;
+  @apply text-4xl font-extrabold text-aac-text;
   @apply tracking-wider;
+  /* Slight text shadow for depth on keycap */
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
 }
 
-.letter-card--highlighted .letter-card__text {
-  @apply text-aac-highlight;
+.key-card {
+  @apply w-72;
+}
+
+.key-card__text {
+  @apply text-3xl;
+}
+
+.key-card--backspace:disabled {
+  @apply opacity-40 cursor-not-allowed;
+}
+
+.key-card__icon {
+  @apply text-aac-text;
 }
 
 /* Letter Card - Gaze Mode Styles */
 .letter-card--gaze-active {
-  @apply border-aac-highlight scale-110;
-  background-color: rgb(var(--aac-highlight) / 0.2);
   @apply relative overflow-visible;
-  box-shadow: 0 0 30px rgb(var(--aac-highlight) / 0.4);
+  border-color: rgb(var(--aac-highlight) / 0.8);
+  background: linear-gradient(
+    180deg,
+    rgb(var(--aac-highlight) / 0.2) 0%,
+    rgb(var(--aac-card) / 1) 100%
+  );
+  box-shadow:
+    0 6px 0 0 rgb(var(--aac-highlight) / 0.35),
+    0 0 30px rgb(255 255 255 / 0.2),
+    0 8px 20px rgb(255 255 255 / 0.14),
+    inset 0 1px 0 rgb(255 255 255 / 0.1);
+  transform: scale(1.05);
 }
 
 .letter-card--gaze-active .letter-card__text {
@@ -1377,6 +1621,11 @@ function handleUndo() {
   min-height: 100%;
 }
 
+.action-btn--inline {
+  @apply h-20 w-32 flex-shrink-0;
+  min-height: auto;
+}
+
 .action-btn:hover:not(:disabled) {
   background-color: rgb(var(--aac-highlight) / 0.2);
 }
@@ -1409,8 +1658,9 @@ function handleUndo() {
 
 /* Text Field Group */
 .text-field-group {
-  @apply flex-1 max-w-xl;
+  @apply flex-1 min-w-0;
   @apply flex flex-col gap-2;
+  @apply max-h-full overflow-hidden;
 }
 
 /* Text Field */
@@ -1501,10 +1751,11 @@ function handleUndo() {
 
 /* Suggestion Chips Bar */
 .suggestion-chips {
-  @apply flex flex-nowrap items-stretch justify-center gap-6;
+  @apply flex flex-nowrap items-stretch justify-start gap-4;
   @apply px-2;
   @apply w-full;
   @apply mt-2;
+  @apply overflow-x-auto overflow-y-hidden;
 }
 
 .suggestion-chips::-webkit-scrollbar {
@@ -1575,17 +1826,32 @@ function handleUndo() {
   @apply pb-4;
 }
 
+.context-compact {
+  @apply w-[360px] min-w-0 ml-auto;
+  @apply bg-aac-card/70 border border-aac-surface rounded-2xl;
+  @apply p-3;
+  @apply flex flex-col gap-3;
+}
+
+.context-compact--hidden {
+  @apply hidden;
+}
+
 /* Scene Box */
 .scene-container {
   @apply flex flex-col items-center gap-1;
 }
 
 .scene-box {
-  @apply w-24 h-20 rounded-xl;
+  @apply w-full h-24 rounded-xl;
   @apply bg-aac-card border-2 border-aac-surface;
   @apply flex items-center justify-center;
   @apply overflow-hidden;
   @apply transition-all duration-200;
+}
+
+.scene-box--hidden {
+  @apply hidden;
 }
 
 .scene-box:hover {
@@ -1603,7 +1869,14 @@ function handleUndo() {
 /* Conversation Box */
 .conversation-box {
   @apply flex flex-col gap-1;
-  @apply max-w-xs;
+}
+
+.conversation-box--scrollable {
+  @apply max-h-36 overflow-y-auto pr-1;
+}
+
+.conversation-box--hidden {
+  @apply hidden;
 }
 
 .conversation-turn {
@@ -1628,6 +1901,7 @@ function handleUndo() {
 
 .conversation-turn__text {
   @apply text-aac-text;
+  @apply break-words;
 }
 
 .conversation-empty {
@@ -1651,6 +1925,177 @@ function handleUndo() {
   @apply text-center;
 }
 
+/* Responsive layout for tablets */
+@media (max-width: 1024px) {
+  .speaking-page {
+    @apply px-6 pt-14 pb-10;
+  }
+
+  .top-panel {
+    @apply gap-4;
+  }
+
+  .keyboard-row {
+    @apply px-4 gap-4;
+  }
+
+  .letter-card {
+    width: 22vw;
+    height: 16vw;
+    min-width: 110px;
+    min-height: 86px;
+  }
+
+  .letter-card__text {
+    @apply text-3xl;
+  }
+
+  .action-btn--inline {
+    @apply h-16 w-28;
+  }
+
+  .text-field {
+    @apply min-h-16 px-4 py-3;
+  }
+}
+
+/* Mobile-first adjustments for phone screens */
+@media (max-width: 768px) {
+  .speaking-page {
+    @apply px-3 pt-4 pb-5;
+  }
+
+  .speaking-layout {
+    @apply gap-3;
+  }
+
+  .top-panel {
+    @apply flex-col items-stretch gap-3;
+    margin-top: 4vh;
+  }
+
+  .text-field-group {
+    @apply w-full;
+  }
+
+  .text-field {
+    @apply min-h-14 px-4 py-2 rounded-xl;
+  }
+
+  .text-field__content,
+  .text-field__ghost {
+    @apply text-lg;
+  }
+
+  .text-field__placeholder {
+    @apply text-sm;
+  }
+
+  .action-btn--inline {
+    @apply h-24 rounded-xl self-center;
+    width: 58%;
+    min-width: 9.5rem;
+    max-width: 13rem;
+  }
+
+  .keyboard-section {
+    flex: 0 0 auto;
+    @apply gap-3 justify-start;
+  }
+
+  .keyboard-section--mobile {
+    @apply mt-24;
+  }
+
+  .keyboard-split-mobile {
+    @apply grid grid-cols-2 gap-2.5;
+  }
+
+  .keyboard-stack-mobile {
+    @apply flex flex-col gap-2.5;
+  }
+
+  .keyboard-stack-mobile .letter-card,
+  .keyboard-mobile-actions .letter-card {
+    width: 100%;
+    min-width: 0;
+    height: 22vw;
+    min-height: 76px;
+  }
+
+  .keyboard-mobile-actions {
+    @apply grid grid-cols-2 gap-2.5 mt-2.5;
+  }
+
+  .letter-card--inset-left,
+  .letter-card--inset-right {
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  .letter-card {
+    @apply rounded-xl;
+  }
+
+  .letter-card__text {
+    font-size: clamp(1.1rem, 4.5vw, 1.5rem);
+    line-height: 1.1;
+  }
+
+  .key-card__icon {
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+
+  .key-card--space-mobile {
+    @apply mt-2.5 w-full;
+    height: 14vw;
+    min-height: 54px;
+  }
+
+  .suggestion-chips {
+    @apply gap-2 mt-1;
+  }
+
+  .suggestion-chip {
+    @apply px-3 py-2 text-sm rounded-lg;
+  }
+
+  .keyboard-nav-hint {
+    @apply bottom-3 text-[10px] px-3 py-1.5;
+    max-width: calc(100vw - 1.5rem);
+    white-space: normal;
+    text-align: center;
+  }
+}
+
+/* Small phone refinement */
+@media (max-width: 420px) {
+  .top-panel {
+    margin-top: 6vh;
+  }
+
+  .keyboard-stack-mobile .letter-card,
+  .keyboard-mobile-actions .letter-card {
+    height: 24vw;
+    min-height: 72px;
+  }
+
+  .text-field {
+    @apply min-h-12;
+  }
+
+  .action-btn--inline {
+    @apply h-24;
+    width: 62%;
+  }
+
+  .key-card--space-mobile {
+    height: 15vw;
+    min-height: 50px;
+  }
+}
+
 /* Error Toast */
 .error-toast {
   @apply fixed bottom-6 left-1/2 -translate-x-1/2;
@@ -1664,14 +2109,4 @@ function handleUndo() {
   @apply hover:text-red-200 text-lg;
 }
 
-/* Transitions */
-.slide-settings-enter-active,
-.slide-settings-leave-active {
-  @apply transition-all duration-300;
-}
-
-.slide-settings-enter-from,
-.slide-settings-leave-to {
-  @apply opacity-0 translate-x-full;
-}
 </style>

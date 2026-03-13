@@ -46,9 +46,24 @@ export function useMinimalNavigation() {
     }
   }
 
+  // Clear all registered items and navigation state
+  function clearItems() {
+    clearFocus()
+    navigableItems.value = []
+  }
+
   // Navigate to next/previous item
   function navigate(direction: 'next' | 'previous' | 'up' | 'down' | 'left' | 'right') {
     if (navigableItems.value.length === 0) return
+
+    if ((direction === 'up' || direction === 'down' || direction === 'left' || direction === 'right') && currentIndex.value < 0) {
+      const startIndex = getDefaultDirectionalStartIndex()
+      if (startIndex >= 0) {
+        currentIndex.value = startIndex
+        highlightItem(navigableItems.value[startIndex])
+      }
+      return
+    }
 
     let newIndex = currentIndex.value
 
@@ -63,8 +78,12 @@ export function useMinimalNavigation() {
       case 'down':
       case 'left':
       case 'right':
-        // For directional navigation, find the closest item in that direction
-        newIndex = findClosestItemInDirection(direction)
+        // First try explicit directional mapping for known layouts
+        newIndex = findExplicitItemInDirection(direction)
+        if (newIndex < 0) {
+          // Fall back to geometric directional logic only
+          newIndex = findClosestItemInDirection(direction)
+        }
         break
     }
 
@@ -74,10 +93,85 @@ export function useMinimalNavigation() {
     }
   }
 
+  function getDefaultDirectionalStartIndex(): number {
+    const preferredOrder = [
+      'card-1',
+      'suggestion-chip-1',
+      'card-0',
+      'suggestion-chip-0',
+      'speak-btn',
+    ]
+
+    for (const id of preferredOrder) {
+      const index = navigableItems.value.findIndex(item => item.id === id)
+      if (index >= 0) return index
+    }
+
+    return navigableItems.value.length > 0 ? 0 : -1
+  }
+
+  // Explicit directional map for known UI layouts (speaking page)
+  function findExplicitItemInDirection(direction: 'up' | 'down' | 'left' | 'right'): number {
+    if (!currentItem.value) return -1
+
+    const currentId = currentItem.value.id
+    const has = (id: string) => navigableItems.value.findIndex(i => i.id === id)
+    const firstChip = has('suggestion-chip-0') >= 0 ? 'suggestion-chip-0' : null
+    const secondChip = has('suggestion-chip-1') >= 0 ? 'suggestion-chip-1' : null
+    const thirdChip = has('suggestion-chip-2') >= 0 ? 'suggestion-chip-2' : null
+
+    const mapByDirection: Record<'up' | 'down' | 'left' | 'right', Record<string, string>> = {
+      up: {
+        'backspace-key': 'card-0',
+        'card-3': 'card-1',
+        'card-4': 'card-2',
+        'space-key': 'card-4',
+        'card-0': firstChip || 'speak-btn',
+        'card-1': secondChip || firstChip || 'speak-btn',
+        'card-2': thirdChip || secondChip || firstChip || 'speak-btn',
+        'suggestion-chip-0': 'speak-btn',
+        'suggestion-chip-1': 'speak-btn',
+        'suggestion-chip-2': 'speak-btn',
+      },
+      down: {
+        'speak-btn': 'card-1',
+        'suggestion-chip-0': 'card-0',
+        'suggestion-chip-1': 'card-1',
+        'suggestion-chip-2': 'card-2',
+        'card-0': 'backspace-key',
+        'card-1': 'card-3',
+        'card-2': 'card-4',
+      },
+      left: {
+        'card-1': 'card-0',
+        'card-2': 'card-1',
+        'card-3': 'backspace-key',
+        'card-4': 'card-3',
+        'space-key': 'card-4',
+        'suggestion-chip-1': 'suggestion-chip-0',
+        'suggestion-chip-2': 'suggestion-chip-1',
+      },
+      right: {
+        'card-0': 'card-1',
+        'card-1': 'card-2',
+        'backspace-key': 'card-3',
+        'card-3': 'card-4',
+        'card-4': 'space-key',
+        'suggestion-chip-0': 'suggestion-chip-1',
+        'suggestion-chip-1': 'suggestion-chip-2',
+      },
+    }
+
+    const targetId = mapByDirection[direction][currentId]
+    if (!targetId) return -1
+
+    return has(targetId)
+  }
+
   // Find closest item in specific direction based on relative position
   function findClosestItemInDirection(direction: string): number {
     if (currentIndex.value < 0 || !currentItem.value || navigableItems.value.length === 0) {
-      return 0
+      return -1
     }
 
     const currentRect = currentItem.value.element.getBoundingClientRect()
@@ -150,31 +244,8 @@ export function useMinimalNavigation() {
       }
     })
 
-    // If no item found in the direction, cycle to the closest item
-    if (bestIndex === currentIndex.value) {
-      // Find the absolute closest item as fallback
-      let closestIndex = currentIndex.value
-      let closestDistance = Infinity
-      
-      navigableItems.value.forEach((item, index) => {
-        if (index === currentIndex.value) return
-        const rect = item.element.getBoundingClientRect()
-        const itemCenterX = rect.left + rect.width / 2
-        const itemCenterY = rect.top + rect.height / 2
-        const distance = Math.sqrt(
-          Math.pow(currentCenterX - itemCenterX, 2) + 
-          Math.pow(currentCenterY - itemCenterY, 2)
-        )
-        if (distance < closestDistance) {
-          closestDistance = distance
-          closestIndex = index
-        }
-      })
-      
-      return closestIndex
-    }
-
-    return bestIndex
+    // If no item exists in that direction, stay on current item
+    return bestIndex === currentIndex.value ? -1 : bestIndex
   }
 
   // Highlight an item visually
@@ -256,6 +327,13 @@ export function useMinimalNavigation() {
       return
     }
 
+    // Enter / Space to activate current item
+    if (e.key === 'Enter' || (e.code === 'Space' && !e.shiftKey)) {
+      e.preventDefault()
+      activateCurrent()
+      return
+    }
+
     // Escape to clear focus
     if (e.key === 'Escape') {
       e.preventDefault()
@@ -305,6 +383,7 @@ export function useMinimalNavigation() {
     isShiftPressed: computed(() => isShiftPressed.value),
     registerItem,
     unregisterItem,
+    clearItems,
     navigate,
     activateCurrent,
     clearFocus,
