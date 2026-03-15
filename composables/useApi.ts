@@ -154,6 +154,7 @@ export function useApi() {
     user_id: string
     session_id?: string
     action: string
+    language?: string
     scene_description?: string
     scene_image?: string
     conversation_history?: Array<{ speaker: string; text: string }>
@@ -254,6 +255,7 @@ export function useApi() {
     scene_description?: string | null
     conversation_history?: Array<{ speaker: string; text: string }> | null
     num_suggestions?: number
+    language?: string
   }
 
   interface PredictedTextItem {

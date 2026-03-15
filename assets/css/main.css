@@ -20,11 +20,22 @@
   html {
     @apply scroll-smooth;
     scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
   }
 
   body {
     @apply bg-aac-bg text-aac-text antialiased;
     overflow-x: hidden;
+    touch-action: manipulation;
+  }
+
+  button,
+  [role='button'],
+  a,
+  input,
+  textarea,
+  select {
+    touch-action: manipulation;
   }
 
   /* Smooth page transitions */

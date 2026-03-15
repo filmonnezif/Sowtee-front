@@ -146,6 +146,9 @@
       "#internal-i18n-types": [
         "../node_modules/@nuxtjs/i18n/dist/types"
       ],
+      "#pwa": [
+        "../node_modules/@vite-pwa/nuxt/dist/runtime/composables/index"
+      ],
       "#vue-router": [
         "../node_modules/vue-router"
       ],

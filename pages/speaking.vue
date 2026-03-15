@@ -5,7 +5,7 @@
  * Layout: 5 cards at corners, text field in center with ghost text + suggestion chips.
  */
 
-import { Volume2, Loader2, Plus, Delete, Space } from 'lucide-vue-next'
+import { Volume2, Loader2, Plus, Delete, Space, Download } from 'lucide-vue-next'
 const appStore = useAppStore()
 const speakingStore = useSpeakingStore()
 const api = useApi()
@@ -19,13 +19,23 @@ const { t } = useI18n()
 
 // Refs
 // Refs for gaze targets
-const cardRefs = ref<(HTMLElement | null)[]>([null, null, null, null, null])
+const cardRefs = ref<(HTMLElement | null)[]>([])
 const speakBtnRef = ref<HTMLElement | null>(null)
 const textFieldAutocompleteRef = ref<HTMLElement | null>(null)
 const backspaceKeyRef = ref<HTMLElement | null>(null)
 const spaceKeyRef = ref<HTMLElement | null>(null)
 const suggestionChipRefs = ref<(HTMLElement | null)[]>([])
 const isMobile = ref(false)
+const canInstallApp = ref(false)
+const isStandaloneApp = ref(false)
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
+}
+
+const deferredInstallPrompt = ref<BeforeInstallPromptEvent | null>(null)
+const showInstallButton = computed(() => isMobile.value && canInstallApp.value && !isStandaloneApp.value)
 
 // Dwell state for eye gaze
 const dwellProgress = ref(0)
@@ -42,16 +52,22 @@ function triggerPress(index: number) {
 // Initialize on mount
 onMounted(async () => {
   updateViewportMode()
+  detectStandaloneMode()
   speakingStore.reset()
   await initializeSpeakingSkill()
   window.addEventListener('keydown', handleKeyDown)
   window.addEventListener('resize', updateViewportMode)
+  window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt as EventListener)
+  window.addEventListener('appinstalled', handleAppInstalled as EventListener)
   
   // Initialize minimal navigation
   await nextTick()
   setupMinimalNavigation()
   
   tts.initialize()
+  
+  // Set speech recognition language based on app language
+  updateSpeechLanguage()
   
   // Start listening for surrounding voices
   await speech.startListening()
@@ -347,6 +363,8 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('click', handleCalibrationClick)
   window.removeEventListener('resize', updateViewportMode)
+  window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt as EventListener)
+  window.removeEventListener('appinstalled', handleAppInstalled as EventListener)
   if (dwellTimeout.value) clearTimeout(dwellTimeout.value)
   // Stop listening for surrounding voices
   speech.stopListening()
@@ -359,6 +377,35 @@ onUnmounted(() => {
 
 function updateViewportMode() {
   isMobile.value = window.innerWidth <= 768
+}
+
+function detectStandaloneMode() {
+  const isDisplayModeStandalone = window.matchMedia('(display-mode: standalone)').matches
+  const isIosStandalone = (window.navigator as Navigator & { standalone?: boolean }).standalone === true
+  isStandaloneApp.value = isDisplayModeStandalone || isIosStandalone
+}
+
+function handleBeforeInstallPrompt(event: Event) {
+  event.preventDefault()
+  deferredInstallPrompt.value = event as BeforeInstallPromptEvent
+  canInstallApp.value = true
+}
+
+function handleAppInstalled() {
+  canInstallApp.value = false
+  deferredInstallPrompt.value = null
+  isStandaloneApp.value = true
+}
+
+async function handleInstallApp() {
+  const promptEvent = deferredInstallPrompt.value
+  if (!promptEvent) return
+
+  await promptEvent.prompt()
+  await promptEvent.userChoice
+
+  canInstallApp.value = false
+  deferredInstallPrompt.value = null
 }
 
 /**
@@ -536,6 +583,7 @@ async function initializeSpeakingSkill() {
     const response = await api.speakingAction({
       user_id: appStore.userId,
       action: 'get_cards',
+      language: appStore.language,
     })
     
     if (response.cards) {
@@ -734,6 +782,7 @@ async function handleSelect(index: number) {
         user_id: appStore.userId,
         action: 'select_card',
         card_index: index,
+        language: appStore.language,
       })
       
       if (response.spread_letters) {
@@ -745,6 +794,7 @@ async function handleSelect(index: number) {
         user_id: appStore.userId,
         action: 'select_letter',
         letter_index: index,
+        language: appStore.language,
       })
       
       if (response.grouped_options) {
@@ -791,7 +841,7 @@ function handleAcceptSuggestion(suggestion: { text: string; confidence: number; 
   // Clear typed letters (they were incorporated into the suggestion)
   speakingStore.setTypedText('')
   // Reset backend card state
-  api.speakingAction({ user_id: appStore.userId, action: 'reset' })
+  api.speakingAction({ user_id: appStore.userId, action: 'reset', language: appStore.language })
     .then(() => initializeSpeakingSkill())
     .catch(console.error)
   // Store acceptance for learning
@@ -816,7 +866,7 @@ function handleAcceptGhostText() {
   if (text) {
     speakingStore.setSentenceText(text)
     speakingStore.setTypedText('')
-    api.speakingAction({ user_id: appStore.userId, action: 'reset' })
+    api.speakingAction({ user_id: appStore.userId, action: 'reset', language: appStore.language })
       .then(() => initializeSpeakingSkill())
       .catch(console.error)
   }
@@ -882,6 +932,7 @@ async function handleInlineSpeak() {
     await api.speakingAction({
       user_id: appStore.userId,
       action: 'reset',
+      language: appStore.language,
     })
     await initializeSpeakingSkill()
     
@@ -904,7 +955,7 @@ function handleClearSentence() {
   speakingStore.clearSentence()
   speakingStore.setTypedText('')
   predictive.clear()
-  api.speakingAction({ user_id: appStore.userId, action: 'reset' })
+  api.speakingAction({ user_id: appStore.userId, action: 'reset', language: appStore.language })
     .then(() => initializeSpeakingSkill())
     .catch(console.error)
 }
@@ -971,10 +1022,31 @@ const currentItems = computed(() => {
   }
 })
 
+const useArabicCardsGrid = computed(() => {
+  return isRtl.value && speakingStore.level === 'cards'
+})
+
+const arabicTopItems = computed(() => {
+  if (!useArabicCardsGrid.value) return []
+  return currentItems.value.slice(0, 4)
+})
+
+const arabicBottomItems = computed(() => {
+  if (!useArabicCardsGrid.value) return []
+  return currentItems.value.slice(4, 8)
+})
+
 // Format typed letters for display (space-separated)
 const displayTypedLetters = computed(() => {
+  if (appStore.language.startsWith('ar')) {
+    // Arabic: no case distinction, join with spaces
+    return speakingStore.typedText.split('').join(' ')
+  }
   return speakingStore.typedText.split('').join(' ').toUpperCase()
 })
+
+// Whether the current language is RTL (Arabic)
+const isRtl = computed(() => appStore.language.startsWith('ar'))
 
 // Display the full sentence text with typed letters appended
 const displaySentence = computed(() => {
@@ -1003,12 +1075,39 @@ async function handleUndo() {
       await api.speakingAction({
         user_id: appStore.userId,
         action: 'backspace',
+        language: appStore.language,
       })
     }
   } catch (error) {
     console.error('Undo backend sync failed:', error)
   }
 }
+
+/**
+ * Update speech recognition language based on app language
+ */
+function updateSpeechLanguage() {
+  const lang = appStore.language
+  if (lang.startsWith('ar')) {
+    speech.setLanguage('ar-SA')
+  } else {
+    speech.setLanguage('en-US')
+  }
+}
+
+// Watch for language changes — re-initialize cards and speech recognition
+watch(() => appStore.language, async (newLang) => {
+  updateSpeechLanguage()
+  speakingStore.reset()
+  await api.speakingAction({ user_id: appStore.userId, action: 'reset', language: newLang })
+  await initializeSpeakingSkill()
+  // Fetch new predictions in the new language
+  const convHistory = speech.conversationHistory.value.slice(-6).map(turn => ({
+    speaker: turn.speaker,
+    text: turn.text,
+  }))
+  predictive.fetchPreemptive(appStore.sceneDescription, convHistory.length > 0 ? convHistory : null)
+})
 </script>
 
 <template>
@@ -1029,10 +1128,10 @@ async function handleUndo() {
       Use arrow keys to navigate • Shift to click • Tab to cycle
     </div>
 
-    <div class="speaking-layout">
+    <div class="speaking-layout" :dir="isRtl ? 'rtl' : 'ltr'">
       <div class="top-panel">
         <div class="text-field-group">
-          <div class="text-field">
+          <div class="text-field" :class="{ 'text-field--rtl': isRtl }">
             <div class="text-field__inner">
               <span v-if="displaySentence" class="text-field__content">
                 {{ displaySentence }}
@@ -1046,14 +1145,15 @@ async function handleUndo() {
               <span v-if="!displaySentence && !speakingStore.predictiveGhostText" class="text-field__placeholder">
                 {{ t('speaking.placeholder') }}
               </span>
+              <span class="text-field__cursor" />
             </div>
-            <span class="text-field__cursor" />
             <div
               ref="textFieldAutocompleteRef"
               class="text-field__autocomplete-zone"
               :class="{
                 'text-field__autocomplete-zone--active': gazeController.state.currentTargetId === 'text-field-autocomplete',
-                'text-field__autocomplete-zone--available': !!speakingStore.predictiveGhostText
+                'text-field__autocomplete-zone--available': !!speakingStore.predictiveGhostText,
+                'text-field__autocomplete-zone--rtl': isRtl
               }"
               @click="handleAcceptGhostText"
             >
@@ -1098,6 +1198,15 @@ async function handleUndo() {
           <span>Speak</span>
         </button>
 
+        <button
+          v-if="showInstallButton"
+          class="action-btn action-btn--install action-btn--inline"
+          @click="handleInstallApp"
+        >
+          <Download :size="22" />
+          <span>Install App</span>
+        </button>
+
         <div class="context-compact context-compact--hidden">
           <div class="scene-box scene-box--hidden">
             <img
@@ -1129,6 +1238,68 @@ async function handleUndo() {
       </div>
 
       <div v-if="!isMobile" class="keyboard-section">
+        <template v-if="useArabicCardsGrid">
+          <div class="keyboard-row keyboard-row--top keyboard-row--arabic-four">
+            <button
+              v-for="item in arabicTopItems"
+              :key="`arabic-top-${item.index}`"
+              :ref="(el) => cardRefs[item.index] = el as HTMLElement"
+              class="letter-card letter-card--arabic-grid navigable-item"
+              :class="{
+                'letter-card--highlighted': speakingStore.highlightedIndex === item.index,
+                'letter-card--gaze-active': gazeController.state.currentTargetId === `card-${item.index}`,
+                'letter-card--pressed': pressedIndex === item.index,
+                'letter-card--arabic': isRtl
+              }"
+              @click="triggerPress(item.index); handleSelect(item.index)"
+              @mouseenter="speakingStore.setHighlightedIndex(item.index)"
+            >
+              <span class="letter-card__text">{{ item.label }}</span>
+            </button>
+          </div>
+
+          <div class="keyboard-row keyboard-row--bottom keyboard-row--arabic-four keyboard-row--arabic-second">
+            <button
+              ref="spaceKeyRef"
+              class="letter-card key-card key-card--space navigable-item"
+              :class="{ 'letter-card--gaze-active': gazeController.state.currentTargetId === 'space-key' }"
+              @click="speakingStore.addSpace()"
+            >
+              <Space :size="40" class="key-card__icon" />
+            </button>
+
+            <div class="keyboard-row__middle keyboard-row__middle--arabic">
+            <button
+              v-for="item in arabicBottomItems"
+              :key="`arabic-bottom-${item.index}`"
+              :ref="(el) => cardRefs[item.index] = el as HTMLElement"
+              class="letter-card letter-card--arabic-grid navigable-item"
+              :class="{
+                'letter-card--highlighted': speakingStore.highlightedIndex === item.index,
+                'letter-card--gaze-active': gazeController.state.currentTargetId === `card-${item.index}`,
+                'letter-card--pressed': pressedIndex === item.index,
+                'letter-card--arabic': isRtl
+              }"
+              @click="triggerPress(item.index); handleSelect(item.index)"
+              @mouseenter="speakingStore.setHighlightedIndex(item.index)"
+            >
+              <span class="letter-card__text">{{ item.label }}</span>
+            </button>
+            </div>
+
+            <button
+              ref="backspaceKeyRef"
+              class="letter-card key-card key-card--backspace navigable-item"
+              :class="{ 'letter-card--gaze-active': gazeController.state.currentTargetId === 'backspace-key' }"
+              :disabled="!speakingStore.canUndo"
+              @click="handleUndo"
+            >
+              <Delete :size="36" class="key-card__icon" />
+            </button>
+          </div>
+        </template>
+
+        <template v-else>
         <div class="keyboard-row keyboard-row--top">
           <button
             v-if="currentItems[0]"
@@ -1137,7 +1308,8 @@ async function handleUndo() {
             :class="{
               'letter-card--highlighted': speakingStore.highlightedIndex === 0,
               'letter-card--gaze-active': gazeController.state.currentTargetId === 'card-0',
-              'letter-card--pressed': pressedIndex === 0
+              'letter-card--pressed': pressedIndex === 0,
+              'letter-card--arabic': isRtl
             }"
             @click="triggerPress(0); handleSelect(0)"
             @mouseenter="speakingStore.setHighlightedIndex(0)"
@@ -1152,7 +1324,8 @@ async function handleUndo() {
             :class="{
               'letter-card--highlighted': speakingStore.highlightedIndex === 1,
               'letter-card--gaze-active': gazeController.state.currentTargetId === 'card-1',
-              'letter-card--pressed': pressedIndex === 1
+              'letter-card--pressed': pressedIndex === 1,
+              'letter-card--arabic': isRtl
             }"
             @click="triggerPress(1); handleSelect(1)"
             @mouseenter="speakingStore.setHighlightedIndex(1)"
@@ -1167,7 +1340,8 @@ async function handleUndo() {
             :class="{
               'letter-card--highlighted': speakingStore.highlightedIndex === 2,
               'letter-card--gaze-active': gazeController.state.currentTargetId === 'card-2',
-              'letter-card--pressed': pressedIndex === 2
+              'letter-card--pressed': pressedIndex === 2,
+              'letter-card--arabic': isRtl
             }"
             @click="triggerPress(2); handleSelect(2)"
             @mouseenter="speakingStore.setHighlightedIndex(2)"
@@ -1194,7 +1368,8 @@ async function handleUndo() {
             :class="{
               'letter-card--highlighted': speakingStore.highlightedIndex === 3,
               'letter-card--gaze-active': gazeController.state.currentTargetId === 'card-3',
-              'letter-card--pressed': pressedIndex === 3
+              'letter-card--pressed': pressedIndex === 3,
+              'letter-card--arabic': isRtl
             }"
             @click="triggerPress(3); handleSelect(3)"
             @mouseenter="speakingStore.setHighlightedIndex(3)"
@@ -1209,12 +1384,30 @@ async function handleUndo() {
             :class="{
               'letter-card--highlighted': speakingStore.highlightedIndex === 4,
               'letter-card--gaze-active': gazeController.state.currentTargetId === 'card-4',
-              'letter-card--pressed': pressedIndex === 4
+              'letter-card--pressed': pressedIndex === 4,
+              'letter-card--arabic': isRtl
             }"
             @click="triggerPress(4); handleSelect(4)"
             @mouseenter="speakingStore.setHighlightedIndex(4)"
           >
             <span class="letter-card__text">{{ currentItems[4].label }}</span>
+          </button>
+
+          <!-- 6th card (Arabic only — ه و ي) -->
+          <button
+            v-if="currentItems[5]"
+            :ref="(el) => cardRefs[5] = el as HTMLElement"
+            class="letter-card navigable-item"
+            :class="{
+              'letter-card--highlighted': speakingStore.highlightedIndex === 5,
+              'letter-card--gaze-active': gazeController.state.currentTargetId === 'card-5',
+              'letter-card--pressed': pressedIndex === 5,
+              'letter-card--arabic': isRtl
+            }"
+            @click="triggerPress(5); handleSelect(5)"
+            @mouseenter="speakingStore.setHighlightedIndex(5)"
+          >
+            <span class="letter-card__text">{{ currentItems[5].label }}</span>
           </button>
 
           <button
@@ -1226,9 +1419,57 @@ async function handleUndo() {
             <Space :size="40" class="key-card__icon" />
           </button>
         </div>
+        </template>
       </div>
 
-      <div v-else class="keyboard-section keyboard-section--mobile">
+      <div
+        v-else
+        class="keyboard-section keyboard-section--mobile"
+        :class="{ 'keyboard-section--mobile-arabic': useArabicCardsGrid }"
+      >
+        <template v-if="useArabicCardsGrid">
+          <div class="keyboard-grid-mobile-arabic">
+            <button
+              v-for="item in currentItems"
+              :key="`arabic-mobile-${item.index}`"
+              :ref="(el) => cardRefs[item.index] = el as HTMLElement"
+              class="letter-card letter-card--mobile-arabic-grid navigable-item"
+              :class="{
+                'letter-card--highlighted': speakingStore.highlightedIndex === item.index,
+                'letter-card--gaze-active': gazeController.state.currentTargetId === `card-${item.index}`,
+                'letter-card--pressed': pressedIndex === item.index,
+                'letter-card--arabic': isRtl
+              }"
+              @click="triggerPress(item.index); handleSelect(item.index)"
+              @mouseenter="speakingStore.setHighlightedIndex(item.index)"
+            >
+              <span class="letter-card__text">{{ item.label }}</span>
+            </button>
+          </div>
+
+          <div class="keyboard-mobile-actions keyboard-mobile-actions--arabic-grid">
+            <button
+              ref="backspaceKeyRef"
+              class="letter-card key-card key-card--backspace navigable-item"
+              :class="{ 'letter-card--gaze-active': gazeController.state.currentTargetId === 'backspace-key' }"
+              :disabled="!speakingStore.canUndo"
+              @click="handleUndo"
+            >
+              <Delete :size="36" class="key-card__icon" />
+            </button>
+
+            <button
+              ref="spaceKeyRef"
+              class="letter-card key-card key-card--space key-card--space-mobile navigable-item"
+              :class="{ 'letter-card--gaze-active': gazeController.state.currentTargetId === 'space-key' }"
+              @click="speakingStore.addSpace()"
+            >
+              <Space :size="40" class="key-card__icon" />
+            </button>
+          </div>
+        </template>
+
+        <template v-else>
         <div class="keyboard-split-mobile">
           <div class="keyboard-stack-mobile">
             <button
@@ -1303,12 +1544,30 @@ async function handleUndo() {
             :class="{
               'letter-card--highlighted': speakingStore.highlightedIndex === 4,
               'letter-card--gaze-active': gazeController.state.currentTargetId === 'card-4',
-              'letter-card--pressed': pressedIndex === 4
+              'letter-card--pressed': pressedIndex === 4,
+              'letter-card--arabic': isRtl
             }"
             @click="triggerPress(4); handleSelect(4)"
             @mouseenter="speakingStore.setHighlightedIndex(4)"
           >
             <span class="letter-card__text">{{ currentItems[4].label }}</span>
+          </button>
+
+          <!-- 6th card (Arabic only — ه و ي) -->
+          <button
+            v-if="currentItems[5]"
+            :ref="(el) => cardRefs[5] = el as HTMLElement"
+            class="letter-card navigable-item"
+            :class="{
+              'letter-card--highlighted': speakingStore.highlightedIndex === 5,
+              'letter-card--gaze-active': gazeController.state.currentTargetId === 'card-5',
+              'letter-card--pressed': pressedIndex === 5,
+              'letter-card--arabic': isRtl
+            }"
+            @click="triggerPress(5); handleSelect(5)"
+            @mouseenter="speakingStore.setHighlightedIndex(5)"
+          >
+            <span class="letter-card__text">{{ currentItems[5].label }}</span>
           </button>
 
           <button
@@ -1330,6 +1589,7 @@ async function handleUndo() {
         >
           <Space :size="40" class="key-card__icon" />
         </button>
+        </template>
       </div>
       </div>
     
@@ -1405,6 +1665,41 @@ async function handleUndo() {
 
 .keyboard-row--bottom {
   @apply pb-2;
+}
+
+.keyboard-row--arabic-four {
+  @apply justify-between gap-10 px-10;
+}
+
+.keyboard-row--arabic-second {
+  @apply items-center;
+}
+
+.keyboard-row__middle {
+  @apply flex items-center;
+}
+
+.keyboard-row__middle--arabic {
+  @apply gap-10;
+}
+
+.letter-card--arabic-grid {
+  @apply w-72 h-44;
+}
+
+.keyboard-grid-mobile-arabic {
+  @apply grid grid-cols-2 gap-2.5;
+}
+
+.letter-card--mobile-arabic-grid {
+  @apply w-full;
+  min-width: 0;
+  height: 20vw;
+  min-height: 66px;
+}
+
+.keyboard-mobile-actions--arabic-grid {
+  @apply grid grid-cols-2 gap-2.5 mt-2.5;
 }
 
 /* Letter Card - 3D Keyboard Key Style */
@@ -1553,6 +1848,35 @@ async function handleUndo() {
   text-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
 }
 
+/* Arabic letter card styling */
+.letter-card--arabic .letter-card__text {
+  font-family: 'Noto Sans Arabic', 'Segoe UI', 'Arial', sans-serif;
+  @apply text-3xl;
+  letter-spacing: 0.25em;
+  direction: rtl;
+}
+
+/* RTL text field direction */
+.text-field--rtl {
+  direction: rtl;
+  text-align: right;
+}
+
+.text-field--rtl .text-field__inner {
+  direction: rtl;
+  text-align: right;
+  mask-image: linear-gradient(to left, black 90%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to left, black 90%, transparent 100%);
+}
+
+.text-field--rtl .text-field__content,
+.text-field--rtl .text-field__ghost,
+.text-field--rtl .text-field__placeholder {
+  font-family: 'Noto Sans Arabic', 'Segoe UI', 'Arial', sans-serif;
+  direction: rtl;
+  unicode-bidi: isolate;
+}
+
 .key-card {
   @apply w-72;
 }
@@ -1690,6 +2014,18 @@ async function handleUndo() {
   pointer-events: none;
 }
 
+.text-field__autocomplete-zone--rtl {
+  left: 0 !important;
+  right: auto !important;
+  justify-content: flex-start !important;
+  padding-left: 1rem;
+  padding-right: 0;
+  border-top-left-radius: 1rem;
+  border-bottom-left-radius: 1rem;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
 .text-field__autocomplete-zone--available {
   pointer-events: auto;
 }
@@ -1697,6 +2033,15 @@ async function handleUndo() {
 .text-field__autocomplete-zone--active {
   background: linear-gradient(to right, transparent, rgb(var(--aac-highlight) / 0.15));
   box-shadow: inset 0 0 20px rgb(var(--aac-highlight) / 0.1);
+}
+
+.text-field__autocomplete-zone--rtl.text-field__autocomplete-zone--active {
+  background: linear-gradient(to left, transparent, rgb(var(--aac-highlight) / 0.15));
+}
+
+.text-field--rtl .text-field__autocomplete-hint {
+  margin-left: 0;
+  margin-right: auto;
 }
 
 .text-field__autocomplete-hint {
@@ -1739,8 +2084,8 @@ async function handleUndo() {
 }
 
 .text-field__cursor {
-  @apply w-0.5 h-6 bg-aac-highlight;
-  @apply ml-1 flex-shrink-0;
+  @apply inline-block w-0.5 h-6 bg-aac-highlight;
+  @apply ml-1 align-middle;
   animation: blink 1s infinite;
 }
 
@@ -1818,6 +2163,15 @@ async function handleUndo() {
 
 .action-btn--speak:hover:not(:disabled) {
   @apply bg-aac-highlight/30;
+}
+
+.action-btn--install {
+  @apply border-emerald-400 text-emerald-300;
+  background-color: rgb(16 185 129 / 0.12);
+}
+
+.action-btn--install:hover:not(:disabled) {
+  background-color: rgb(16 185 129 / 0.24);
 }
 
 /* Context Bottom Section */
@@ -1939,6 +2293,11 @@ async function handleUndo() {
     @apply px-4 gap-4;
   }
 
+  .keyboard-row--arabic-four,
+  .keyboard-row--arabic-actions {
+    @apply px-4 gap-4;
+  }
+
   .letter-card {
     width: 22vw;
     height: 16vw;
@@ -1948,6 +2307,13 @@ async function handleUndo() {
 
   .letter-card__text {
     @apply text-3xl;
+  }
+
+  .letter-card--arabic-grid {
+    width: 22vw;
+    height: 14vw;
+    min-width: 110px;
+    min-height: 84px;
   }
 
   .action-btn--inline {
@@ -2007,6 +2373,28 @@ async function handleUndo() {
     @apply mt-24;
   }
 
+  .keyboard-section--mobile-arabic {
+    @apply mt-2 gap-2;
+  }
+
+  .keyboard-grid-mobile-arabic {
+    @apply grid-cols-2 gap-2.5 w-full;
+  }
+
+  .keyboard-grid-mobile-arabic .letter-card {
+    width: 100%;
+    min-width: 0;
+    height: 22vw;
+    min-height: 76px;
+  }
+
+  .keyboard-mobile-actions--arabic-grid .letter-card {
+    width: 100%;
+    min-width: 0;
+    height: 22vw;
+    min-height: 76px;
+  }
+
   .keyboard-split-mobile {
     @apply grid grid-cols-2 gap-2.5;
   }
@@ -2053,6 +2441,10 @@ async function handleUndo() {
     min-height: 54px;
   }
 
+  .keyboard-mobile-actions--arabic-grid .key-card--space-mobile {
+    @apply mt-0;
+  }
+
   .suggestion-chips {
     @apply gap-2 mt-1;
   }
@@ -2077,6 +2469,16 @@ async function handleUndo() {
 
   .keyboard-stack-mobile .letter-card,
   .keyboard-mobile-actions .letter-card {
+    height: 24vw;
+    min-height: 72px;
+  }
+
+  .keyboard-grid-mobile-arabic .letter-card {
+    height: 24vw;
+    min-height: 72px;
+  }
+
+  .keyboard-mobile-actions--arabic-grid .letter-card {
     height: 24vw;
     min-height: 72px;
   }

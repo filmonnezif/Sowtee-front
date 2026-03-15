@@ -64,6 +64,7 @@ export function usePredictiveText(options: PredictiveTextOptions = {}) {
                 scene_description: sceneDescription || appStore.sceneDescription || null,
                 conversation_history: conversationHistory || null,
                 num_suggestions: numSuggestions,
+                language: appStore.language,
             })
 
             suggestions.value = result.suggestions || []

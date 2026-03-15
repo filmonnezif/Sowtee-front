@@ -9,6 +9,7 @@ export default defineNuxtConfig({
     'shadcn-nuxt',
     '@nuxtjs/i18n',
     '@vueuse/motion/nuxt',
+    '@vite-pwa/nuxt',
   ],
 
   i18n: {
@@ -36,13 +37,69 @@ export default defineNuxtConfig({
       title: 'SOWTEE - صوتي',
       meta: [
         { charset: 'utf-8' },
-        { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+        { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
+        { name: 'theme-color', content: '#0f172a' },
+        { name: 'mobile-web-app-capable', content: 'yes' },
+        { name: 'apple-mobile-web-app-capable', content: 'yes' },
+        { name: 'apple-mobile-web-app-status-bar-style', content: 'default' },
+        { name: 'apple-mobile-web-app-title', content: 'SOWTEE' },
         {
           name: 'description',
           content: 'SOWTEE - The Self-Learning, Context-Aware Agentic Communication Bridge for AAC'
         },
       ],
       htmlAttrs: {},
+      link: [
+        { rel: 'apple-touch-icon', href: '/icons/apple-touch-icon.png' },
+        {
+          rel: 'stylesheet',
+          href: 'https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;600;700;800&display=swap',
+        },
+      ],
+    },
+  },
+
+  pwa: {
+    registerType: 'autoUpdate',
+    includeAssets: ['icons/apple-touch-icon.png', 'icons/icon-192x192.png', 'icons/icon-512x512.png'],
+    manifest: {
+      name: 'SOWTEE - AAC Communication Assistant',
+      short_name: 'SOWTEE',
+      description: 'Self-learning, context-aware AAC communication bridge.',
+      theme_color: '#0f172a',
+      background_color: '#ffffff',
+      display: 'standalone',
+      orientation: 'portrait',
+      start_url: '/',
+      scope: '/',
+      lang: 'en',
+      icons: [
+        {
+          src: '/icons/icon-192x192.png',
+          sizes: '192x192',
+          type: 'image/png',
+        },
+        {
+          src: '/icons/icon-512x512.png',
+          sizes: '512x512',
+          type: 'image/png',
+        },
+        {
+          src: '/icons/icon-512x512-maskable.png',
+          sizes: '512x512',
+          type: 'image/png',
+          purpose: 'maskable',
+        },
+      ],
+    },
+    workbox: {
+      navigateFallback: '/',
+      globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,json}'],
+    },
+    devOptions: {
+      enabled: true,
+      suppressWarnings: true,
+      type: 'module',
     },
   },
 

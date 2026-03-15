@@ -47,6 +47,14 @@ interface _GlobalComponents {
   'SwitchLocalePathLink': typeof import("../../node_modules/@nuxtjs/i18n/dist/runtime/components/SwitchLocalePathLink").default
   'Motion': typeof import("@vueuse/motion").MotionComponent
   'MotionGroup': typeof import("@vueuse/motion").MotionGroupComponent
+  'VitePwaManifest': typeof import("../../node_modules/@vite-pwa/nuxt/dist/runtime/components/VitePwaManifest").default
+  'NuxtPwaManifest': typeof import("../../node_modules/@vite-pwa/nuxt/dist/runtime/components/VitePwaManifest").default
+  'NuxtPwaAssets': typeof import("../../node_modules/@vite-pwa/nuxt/dist/runtime/components/NuxtPwaAssets").default
+  'PwaAppleImage': typeof import("../../node_modules/@vite-pwa/nuxt/dist/runtime/components/PwaAppleImage.vue").default
+  'PwaAppleSplashScreenImage': typeof import("../../node_modules/@vite-pwa/nuxt/dist/runtime/components/PwaAppleSplashScreenImage.vue").default
+  'PwaFaviconImage': typeof import("../../node_modules/@vite-pwa/nuxt/dist/runtime/components/PwaFaviconImage.vue").default
+  'PwaMaskableImage': typeof import("../../node_modules/@vite-pwa/nuxt/dist/runtime/components/PwaMaskableImage.vue").default
+  'PwaTransparentImage': typeof import("../../node_modules/@vite-pwa/nuxt/dist/runtime/components/PwaTransparentImage.vue").default
   'NuxtPage': typeof import("../../node_modules/nuxt/dist/pages/runtime/page").default
   'NoScript': typeof import("../../node_modules/nuxt/dist/head/runtime/components").NoScript
   'Link': typeof import("../../node_modules/nuxt/dist/head/runtime/components").Link
@@ -91,6 +99,14 @@ interface _GlobalComponents {
   'LazySwitchLocalePathLink': LazyComponent<typeof import("../../node_modules/@nuxtjs/i18n/dist/runtime/components/SwitchLocalePathLink").default>
   'LazyMotion': LazyComponent<typeof import("@vueuse/motion").MotionComponent>
   'LazyMotionGroup': LazyComponent<typeof import("@vueuse/motion").MotionGroupComponent>
+  'LazyVitePwaManifest': LazyComponent<typeof import("../../node_modules/@vite-pwa/nuxt/dist/runtime/components/VitePwaManifest").default>
+  'LazyNuxtPwaManifest': LazyComponent<typeof import("../../node_modules/@vite-pwa/nuxt/dist/runtime/components/VitePwaManifest").default>
+  'LazyNuxtPwaAssets': LazyComponent<typeof import("../../node_modules/@vite-pwa/nuxt/dist/runtime/components/NuxtPwaAssets").default>
+  'LazyPwaAppleImage': LazyComponent<typeof import("../../node_modules/@vite-pwa/nuxt/dist/runtime/components/PwaAppleImage.vue").default>
+  'LazyPwaAppleSplashScreenImage': LazyComponent<typeof import("../../node_modules/@vite-pwa/nuxt/dist/runtime/components/PwaAppleSplashScreenImage.vue").default>
+  'LazyPwaFaviconImage': LazyComponent<typeof import("../../node_modules/@vite-pwa/nuxt/dist/runtime/components/PwaFaviconImage.vue").default>
+  'LazyPwaMaskableImage': LazyComponent<typeof import("../../node_modules/@vite-pwa/nuxt/dist/runtime/components/PwaMaskableImage.vue").default>
+  'LazyPwaTransparentImage': LazyComponent<typeof import("../../node_modules/@vite-pwa/nuxt/dist/runtime/components/PwaTransparentImage.vue").default>
   'LazyNuxtPage': LazyComponent<typeof import("../../node_modules/nuxt/dist/pages/runtime/page").default>
   'LazyNoScript': LazyComponent<typeof import("../../node_modules/nuxt/dist/head/runtime/components").NoScript>
   'LazyLink': LazyComponent<typeof import("../../node_modules/nuxt/dist/head/runtime/components").Link>

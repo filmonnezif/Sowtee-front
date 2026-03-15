@@ -457,7 +457,7 @@ const _routes = [
   {
     name: "index",
     path: "/",
-    component: () => import('./index-lNQpYAnw.mjs')
+    component: () => import('./index-Bbs005DM.mjs')
   },
   {
     name: "profile",
@@ -467,12 +467,12 @@ const _routes = [
   {
     name: "learning",
     path: "/learning",
-    component: () => import('./learning-BTKKoYdM.mjs')
+    component: () => import('./learning-CZ3bm67v.mjs')
   },
   {
     name: "speaking",
     path: "/speaking",
-    component: () => import('./speaking-DL0iqD12.mjs')
+    component: () => import('./speaking-DcABVBUr.mjs')
   }
 ];
 const _wrapInTransition = (props, children) => {
@@ -1327,6 +1327,19 @@ const plugin = /* @__PURE__ */ defineNuxtPlugin({
 });
 const components_plugin_z4hgvsiddfKkfXTP6M8M4zG5Cb7sGnDhcryKVM45Di4 = /* @__PURE__ */ defineNuxtPlugin({
   name: "nuxt:global-components"
+});
+const pwa_icons_plugin_C24GcIKjcI2zsa8A86om0L2LZjx1chWtzYxD11T7Txg = /* @__PURE__ */ defineNuxtPlugin(() => {
+  return {
+    provide: {
+      pwaIcons: {
+        transparent: {},
+        maskable: {},
+        favicon: {},
+        apple: {},
+        appleSplashScreen: {}
+      }
+    }
+  };
 });
 function tryOnScopeDispose(fn) {
   if (getCurrentScope()) {
@@ -3715,7 +3728,7 @@ function createNuxtI18nContext(nuxt, vueI18n, defaultLocale) {
       return;
     }
     const headers = getLocaleConfig(locale)?.cacheable ? {} : { "Cache-Control": "no-cache" };
-    const messages = await $fetch(`${"/_i18n/0GX1YLL0"}/${locale}/messages.json`, { headers });
+    const messages = await $fetch(`${"/_i18n/YM8qB77h"}/${locale}/messages.json`, { headers });
     for (const k of Object.keys(messages)) {
       i18n.mergeLocaleMessage(k, messages[k]);
     }
@@ -7946,7 +7959,7 @@ const i18n_EI7LsD1KYQADczz5hrChviGQCdVM8yUkvFEZLJpmnvM = /* @__PURE__ */ defineN
     {
       localeConfigs.value = useRequestEvent().context.nuxtI18n?.localeConfigs || {};
     }
-    prerenderRoutes(localeCodes.map((locale) => `${"/_i18n/0GX1YLL0"}/${locale}/messages.json`));
+    prerenderRoutes(localeCodes.map((locale) => `${"/_i18n/YM8qB77h"}/${locale}/messages.json`));
     const i18n = createI18n(optionsI18n);
     const detectors = useDetectors(useRequestEvent(nuxt), useI18nDetection(nuxt), nuxt);
     const ctx = createNuxtI18nContext(nuxt, i18n, optionsI18n.defaultLocale);
@@ -8029,6 +8042,7 @@ const plugins = [
   revive_payload_server_MVtmlZaQpj6ApFmshWfUWl5PehCebzaBf2NuRMiIbms,
   plugin,
   components_plugin_z4hgvsiddfKkfXTP6M8M4zG5Cb7sGnDhcryKVM45Di4,
+  pwa_icons_plugin_C24GcIKjcI2zsa8A86om0L2LZjx1chWtzYxD11T7Txg,
   motion_F8atB0kBNE8FIgT_ajBXU_q0VzJ7X_J9WFqahA8C37U,
   switch_locale_path_ssr_NflG9_QeVcJ1jVig0vCfxB_cZhpEMQ9U2ujRUiYbbVw,
   route_locale_detect__HPHJq3Jg7gwhwgKEI8tQavopSAjmrCSPXl9HgL2h9U,
@@ -8037,7 +8051,7 @@ const plugins = [
   ssg_detect_IpHCGcQQ_IR5Rl99qyukWoMA9fJGfuTYyoksTzy81cs
 ];
 const layouts = {
-  default: defineAsyncComponent(() => import('./default-CUhprK80.mjs').then((m) => m.default || m))
+  default: defineAsyncComponent(() => import('./default-BVlpQhBA.mjs').then((m) => m.default || m))
 };
 const routeRulesMatcher = _routeRulesMatcher;
 const LayoutLoader = defineComponent({
@@ -8585,7 +8599,7 @@ const _sfc_main$1 = {
     const statusText = _error.statusMessage ?? (is404 ? "Page Not Found" : "Internal Server Error");
     const description = _error.message || _error.toString();
     const stack = void 0;
-    const _Error404 = defineAsyncComponent(() => import('./error-404-BMLCuJv1.mjs'));
+    const _Error404 = defineAsyncComponent(() => import('./error-404-CKDpqQHK.mjs'));
     const _Error = defineAsyncComponent(() => import('./error-500-BrWqFk8Q.mjs'));
     const ErrorTemplate = is404 ? _Error404 : _Error;
     return (_ctx, _push, _parent, _attrs) => {
@@ -8667,5 +8681,5 @@ let entry;
 }
 const entry_default = ((ssrContext) => entry(ssrContext));
 
-export { useAppStore as a, useI18n as b, useRuntimeConfig as c, defineStore as d, entry_default as default, useRouter as e, useNuxtApp as f, nuxtLinkDefaults as g, navigateTo as n, resolveRouteObject as r, useHead as u };
+export { useAppStore as a, useI18n as b, useRuntimeConfig as c, defineStore as d, entry_default as default, useNuxtApp as e, useRouter as f, nuxtLinkDefaults as g, navigateTo as n, resolveRouteObject as r, useHead as u };
 //# sourceMappingURL=server.mjs.map
