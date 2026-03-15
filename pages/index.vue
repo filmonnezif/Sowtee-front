@@ -3,7 +3,7 @@
  * SOWTEE Home Page
  * Interactive modern landing with 3D cards, scroll animations, and hero logo.
  */
-import { Eye, Mic, Globe, ArrowRight, Sparkles, Brain, Zap } from 'lucide-vue-next'
+import { Eye, Mic, Globe, ArrowRight, Sparkles, Brain, Zap, Download } from 'lucide-vue-next'
 import gsap from 'gsap'
 
 const appStore = useAppStore()
@@ -26,6 +26,19 @@ const featureGridRef = ref<HTMLElement | null>(null)
 const featureCardsRef = ref<HTMLElement[]>([])
 const ctaSectionRef = ref<HTMLElement | null>(null)
 const particlesRef = ref<HTMLElement | null>(null)
+const isMobile = ref(false)
+const isStandaloneApp = ref(false)
+const isIosSafari = ref(false)
+const canInstallApp = ref(false)
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
+}
+
+const deferredInstallPrompt = ref<BeforeInstallPromptEvent | null>(null)
+const showInstallButton = computed(() => isMobile.value && !isStandaloneApp.value)
+const installButtonLabel = computed(() => (canInstallApp.value ? 'Install App' : 'How to Install'))
 
 // Mouse position for parallax
 const mouseX = ref(0)
@@ -163,11 +176,17 @@ function setFeatureCardRef(el: any, index: number) {
 onMounted(async () => {
   loginName.value = appStore.userName
   tts.initialize()
+  updateViewportMode()
+  detectMobilePlatform()
+  detectStandaloneMode()
 
   window.addEventListener('keydown', handleKeyDown)
   window.addEventListener('resize', updateTargetBounds)
+  window.addEventListener('resize', updateViewportMode)
   window.addEventListener('click', handleCalibrationClick)
   window.addEventListener('mousemove', handleMouseMove)
+  window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt as EventListener)
+  window.addEventListener('appinstalled', handleAppInstalled as EventListener)
 
   await nextTick()
   setupMinimalNavigation()
@@ -195,13 +214,62 @@ watch(speakingCardRef, () => {
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('resize', updateTargetBounds)
+  window.removeEventListener('resize', updateViewportMode)
   window.removeEventListener('click', handleCalibrationClick)
   window.removeEventListener('mousemove', handleMouseMove)
+  window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt as EventListener)
+  window.removeEventListener('appinstalled', handleAppInstalled as EventListener)
   gazeController.stop()
   gazeController.clearTargets()
   minimalNav.clearFocus()
   camera.stopCamera()
 })
+
+function updateViewportMode() {
+  isMobile.value = window.innerWidth <= 768
+}
+
+function detectMobilePlatform() {
+  const userAgent = window.navigator.userAgent
+  const isIosDevice = /iPad|iPhone|iPod/i.test(userAgent)
+  const isSafariBrowser = /Safari/i.test(userAgent) && !/CriOS|FxiOS|EdgiOS|OPiOS/i.test(userAgent)
+  isIosSafari.value = isIosDevice && isSafariBrowser
+}
+
+function detectStandaloneMode() {
+  const isDisplayModeStandalone = window.matchMedia('(display-mode: standalone)').matches
+  const isIosStandalone = (window.navigator as Navigator & { standalone?: boolean }).standalone === true
+  isStandaloneApp.value = isDisplayModeStandalone || isIosStandalone
+}
+
+function handleBeforeInstallPrompt(event: Event) {
+  event.preventDefault()
+  deferredInstallPrompt.value = event as BeforeInstallPromptEvent
+  canInstallApp.value = true
+}
+
+function handleAppInstalled() {
+  canInstallApp.value = false
+  deferredInstallPrompt.value = null
+  isStandaloneApp.value = true
+}
+
+async function handleInstallApp() {
+  if (canInstallApp.value && deferredInstallPrompt.value) {
+    await deferredInstallPrompt.value.prompt()
+    await deferredInstallPrompt.value.userChoice
+    canInstallApp.value = false
+    deferredInstallPrompt.value = null
+    return
+  }
+
+  if (isIosSafari.value) {
+    window.alert('To install on iPhone: tap Share in Safari, then tap Add to Home Screen.')
+    return
+  }
+
+  window.alert('To install this app: open your browser menu and tap Install app or Add to Home screen.')
+}
 
 function setupMinimalNavigation() {
   if (speakingCardRef.value) {
@@ -450,6 +518,15 @@ function loginWithName() {
                 :style="{ width: `${gazeController.state.dwellProgress * 100}%` }"
               />
             </div>
+          </button>
+
+          <button
+            v-if="showInstallButton"
+            class="install-home-btn"
+            @click="handleInstallApp"
+          >
+            <Download :size="20" />
+            <span>{{ installButtonLabel }}</span>
           </button>
 
           <div class="scroll-indicator">
@@ -905,6 +982,18 @@ function loginWithName() {
 .try-demo-btn__progress-fill {
   @apply h-full bg-aac-highlight;
   transition: width 0.05s linear;
+}
+
+.install-home-btn {
+  @apply inline-flex items-center justify-center gap-2;
+  @apply rounded-xl px-5 py-3 text-sm font-semibold;
+  @apply border border-emerald-400/60 text-emerald-300;
+  @apply transition-all duration-200;
+  background: rgb(16 185 129 / 0.12);
+}
+
+.install-home-btn:hover {
+  background: rgb(16 185 129 / 0.2);
 }
 
 .keyboard-nav-hint {

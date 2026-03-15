@@ -5,7 +5,7 @@
  * Layout: 5 cards at corners, text field in center with ghost text + suggestion chips.
  */
 
-import { Volume2, Loader2, Plus, Delete, Space, Download } from 'lucide-vue-next'
+import { Volume2, Loader2, Plus, Delete, Space } from 'lucide-vue-next'
 const appStore = useAppStore()
 const speakingStore = useSpeakingStore()
 const api = useApi()
@@ -26,16 +26,6 @@ const backspaceKeyRef = ref<HTMLElement | null>(null)
 const spaceKeyRef = ref<HTMLElement | null>(null)
 const suggestionChipRefs = ref<(HTMLElement | null)[]>([])
 const isMobile = ref(false)
-const canInstallApp = ref(false)
-const isStandaloneApp = ref(false)
-
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
-}
-
-const deferredInstallPrompt = ref<BeforeInstallPromptEvent | null>(null)
-const showInstallButton = computed(() => isMobile.value && canInstallApp.value && !isStandaloneApp.value)
 
 // Dwell state for eye gaze
 const dwellProgress = ref(0)
@@ -52,13 +42,10 @@ function triggerPress(index: number) {
 // Initialize on mount
 onMounted(async () => {
   updateViewportMode()
-  detectStandaloneMode()
   speakingStore.reset()
   await initializeSpeakingSkill()
   window.addEventListener('keydown', handleKeyDown)
   window.addEventListener('resize', updateViewportMode)
-  window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt as EventListener)
-  window.addEventListener('appinstalled', handleAppInstalled as EventListener)
   
   // Initialize minimal navigation
   await nextTick()
@@ -363,8 +350,6 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('click', handleCalibrationClick)
   window.removeEventListener('resize', updateViewportMode)
-  window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt as EventListener)
-  window.removeEventListener('appinstalled', handleAppInstalled as EventListener)
   if (dwellTimeout.value) clearTimeout(dwellTimeout.value)
   // Stop listening for surrounding voices
   speech.stopListening()
@@ -377,35 +362,6 @@ onUnmounted(() => {
 
 function updateViewportMode() {
   isMobile.value = window.innerWidth <= 768
-}
-
-function detectStandaloneMode() {
-  const isDisplayModeStandalone = window.matchMedia('(display-mode: standalone)').matches
-  const isIosStandalone = (window.navigator as Navigator & { standalone?: boolean }).standalone === true
-  isStandaloneApp.value = isDisplayModeStandalone || isIosStandalone
-}
-
-function handleBeforeInstallPrompt(event: Event) {
-  event.preventDefault()
-  deferredInstallPrompt.value = event as BeforeInstallPromptEvent
-  canInstallApp.value = true
-}
-
-function handleAppInstalled() {
-  canInstallApp.value = false
-  deferredInstallPrompt.value = null
-  isStandaloneApp.value = true
-}
-
-async function handleInstallApp() {
-  const promptEvent = deferredInstallPrompt.value
-  if (!promptEvent) return
-
-  await promptEvent.prompt()
-  await promptEvent.userChoice
-
-  canInstallApp.value = false
-  deferredInstallPrompt.value = null
 }
 
 /**
@@ -1196,15 +1152,6 @@ watch(() => appStore.language, async (newLang) => {
           <Loader2 v-if="speakingStore.isSpeaking" :size="24" class="animate-spin" />
           <Volume2 v-else :size="24" />
           <span>Speak</span>
-        </button>
-
-        <button
-          v-if="showInstallButton"
-          class="action-btn action-btn--install action-btn--inline"
-          @click="handleInstallApp"
-        >
-          <Download :size="22" />
-          <span>Install App</span>
         </button>
 
         <div class="context-compact context-compact--hidden">
@@ -2163,15 +2110,6 @@ watch(() => appStore.language, async (newLang) => {
 
 .action-btn--speak:hover:not(:disabled) {
   @apply bg-aac-highlight/30;
-}
-
-.action-btn--install {
-  @apply border-emerald-400 text-emerald-300;
-  background-color: rgb(16 185 129 / 0.12);
-}
-
-.action-btn--install:hover:not(:disabled) {
-  background-color: rgb(16 185 129 / 0.24);
 }
 
 /* Context Bottom Section */
