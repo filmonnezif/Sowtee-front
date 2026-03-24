@@ -27,6 +27,10 @@ function toggleSettings() {
         >
       </NuxtLink>
 
+      <div class="app-topbar__center">
+        <EyeTrackingTopbarPreview />
+      </div>
+
       <div class="app-topbar__actions">
         <NuxtLink to="/profile" class="app-topbar__name" :title="$t('profile.title')">
           {{ userLabel }}
@@ -67,14 +71,21 @@ function toggleSettings() {
 
 .app-topbar__brand {
   @apply inline-flex items-center;
+  @apply relative z-10;
 }
 
 .app-topbar__logo {
   @apply h-12 w-auto;
 }
 
+.app-topbar__center {
+  @apply absolute left-1/2 -translate-x-1/2;
+  @apply z-20;
+}
+
 .app-topbar__actions {
   @apply flex items-center gap-2;
+  @apply relative z-10;
 }
 
 .app-topbar__name {

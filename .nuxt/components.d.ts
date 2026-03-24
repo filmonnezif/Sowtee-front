@@ -18,6 +18,7 @@ export const CameraPreview: typeof import("../components/CameraPreview.vue").def
 export const ControlPanel: typeof import("../components/ControlPanel.vue").default
 export const DebugPanel: typeof import("../components/DebugPanel.vue").default
 export const EyeGazeCalibration: typeof import("../components/EyeGazeCalibration.vue").default
+export const EyeTrackingTopbarPreview: typeof import("../components/EyeTrackingTopbarPreview.vue").default
 export const GazeCursor: typeof import("../components/GazeCursor.vue").default
 export const NextSuggestionsButton: typeof import("../components/NextSuggestionsButton.vue").default
 export const PhraseCard: typeof import("../components/PhraseCard.vue").default
@@ -70,6 +71,7 @@ export const LazyCameraPreview: LazyComponent<typeof import("../components/Camer
 export const LazyControlPanel: LazyComponent<typeof import("../components/ControlPanel.vue").default>
 export const LazyDebugPanel: LazyComponent<typeof import("../components/DebugPanel.vue").default>
 export const LazyEyeGazeCalibration: LazyComponent<typeof import("../components/EyeGazeCalibration.vue").default>
+export const LazyEyeTrackingTopbarPreview: LazyComponent<typeof import("../components/EyeTrackingTopbarPreview.vue").default>
 export const LazyGazeCursor: LazyComponent<typeof import("../components/GazeCursor.vue").default>
 export const LazyNextSuggestionsButton: LazyComponent<typeof import("../components/NextSuggestionsButton.vue").default>
 export const LazyPhraseCard: LazyComponent<typeof import("../components/PhraseCard.vue").default>

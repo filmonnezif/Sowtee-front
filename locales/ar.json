@@ -94,6 +94,40 @@
         },
         "hint": "اضغط على مسافة أو إدخال للبدء"
     },
+    "calibration": {
+        "title": "إعداد تتبع العين",
+        "subtitle": "اتبع السهم المتحرك وانقر كل دائرة 3 مرات.",
+        "zoneLabel": "نقاط معايرة مناطق النظر في صفحة التحدث",
+        "progressLabel": "تقدم المعايرة",
+        "currentTarget": "النقطة الحالية: {target} ({group})",
+        "tapsRemaining": "انقر هذه النقطة {count} مرات إضافية",
+        "complete": "إنهاء المعايرة",
+        "cancel": "إلغاء",
+        "groups": {
+            "cards": "بطاقات الحروف",
+            "suggestions": "كلمات الاقتراح",
+            "actions": "أزرار الإجراءات"
+        },
+        "status": {
+            "loading": "جارٍ تجهيز تتبع العين...",
+            "noCamera": "لم يتم العثور على الكاميرا",
+            "mouseFallback": "وضع الفأرة البديل مفعل",
+            "ready": "تتبع العين جاهز"
+        },
+        "instructions": {
+            "caregiverGuide": "مقدم الرعاية: انقر فقط على الدائرة المضيئة بينما ينظر المستخدم إليها.",
+            "headStill": "حافظ على ثبات الرأس قدر الإمكان.",
+            "eyeMovement": "اعتمد على حركة العين أكثر من حركة الرأس."
+        },
+        "zones": {
+            "card": "بطاقة {number}",
+            "suggestion": "اقتراح {number}",
+            "speakButton": "زر التحدث",
+            "pauseButton": "زر إيقاف/استئناف النظر",
+            "backspaceButton": "زر الحذف",
+            "spaceButton": "زر المسافة"
+        }
+    },
     "speaking": {
         "actions": {
             "backspace": "مسح",

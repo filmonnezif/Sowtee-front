@@ -32,20 +32,37 @@ export interface GazeTarget {
 
 // ==================== ADVANCED SMOOTHING CONFIGURATION ====================
 
-// Base smoothing factor for sticky mouse (0-1, higher = faster response/less smoothing)
-const SMOOTHING_FACTOR = 0.25
+// Base smoothing factor for stable conditions (0-1, higher = faster response)
+const BASE_SMOOTHING_FACTOR = 0.34
+
+// Smoothing factor when signal is noisy (darker room / weaker webcam signal)
+const NOISY_SMOOTHING_FACTOR = 0.2
+
+// Smoothing factor when outlier jump is detected
+const OUTLIER_SMOOTHING_FACTOR = 0.12
+
+// Minimum interval between filtered output updates (ms)
+const MIN_FILTER_INTERVAL_MS = 12
 
 // Minimum movement threshold to update position (prevents jitter)
-const JITTER_THRESHOLD = 5
+const BASE_JITTER_THRESHOLD = 2.2
 
 // Outlier rejection threshold - jumps larger than this are smoothed aggressively
-const OUTLIER_THRESHOLD = 200
+const OUTLIER_THRESHOLD = 160
 
-// Smoothing factor when an outlier is detected (slower response)
-const OUTLIER_SMOOTHING = 0.1
+// Max cursor speed (px/s) to enforce deliberate movement
+const MAX_CURSOR_SPEED_STABLE = 1700
+const MAX_CURSOR_SPEED_NOISY = 800
+
+// Dynamic noise normalization reference (px spread)
+const NOISE_REFERENCE_SPREAD = 26
+
+// Blend between robust median and weighted moving average
+const MEDIAN_BLEND = 0.55
+const WEIGHTED_BLEND = 0.45
 
 // Circular buffer size for weighted moving average
-const SAMPLE_BUFFER_SIZE = 5
+const SAMPLE_BUFFER_SIZE = 6
 
 // WebGazer CDN URL with specific version
 const WEBGAZER_CDN = 'https://cdn.jsdelivr.net/npm/webgazer@2.1.0/dist/webgazer.min.js'
@@ -84,6 +101,7 @@ let webgazer: any = null
 let currentTarget: GazeTarget | null = null
 let dwellTimer: ReturnType<typeof setInterval> | null = null
 let lastRawPosition: { x: number; y: number } | null = null
+let lastFilteredUpdate = 0
 let mouseMoveHandler: ((e: MouseEvent) => void) | null = null
 
 // Callbacks (using refs to allow updates)
@@ -138,15 +156,21 @@ function initMouseFallback() {
 
 /**
  * Handle gaze position updates from WebGazer
- * Implements weighted moving average with outlier rejection for stability
+ * Implements robust aggregated filtering:
+ * - weighted moving average + median blend
+ * - adaptive smoothing for noisy environments
+ * - deliberate movement rate limiting
  */
 function handleGazeUpdate(data: { x: number; y: number } | null) {
   if (!data) return
 
-  if (!data) return
-
   const now = Date.now()
   state.lastUpdate = now
+
+  // Throttle filtering updates slightly to prevent micro-oscillation
+  if (now - lastFilteredUpdate < MIN_FILTER_INTERVAL_MS) {
+    return
+  }
 
   // Store raw position
   lastRawPosition = { x: data.x, y: data.y }
@@ -157,66 +181,115 @@ function handleGazeUpdate(data: { x: number; y: number } | null) {
     gazeSampleBuffer.shift()
   }
 
+  // Need enough samples for robust aggregate
+  if (gazeSampleBuffer.length < 3 && !state.smoothedPosition) {
+    state.smoothedPosition = { x: data.x, y: data.y }
+    state.gazePosition = state.smoothedPosition
+    lastFilteredUpdate = now
+    const initElement = document.elementFromPoint(data.x, data.y)
+    updateFocusedElement(initElement)
+    return
+  }
+
+  // --- Robust aggregate: median + weighted average ---
+  const xValues = gazeSampleBuffer.map(s => s.x).sort((a, b) => a - b)
+  const yValues = gazeSampleBuffer.map(s => s.y).sort((a, b) => a - b)
+  const mid = Math.floor(gazeSampleBuffer.length / 2)
+
+  const medianX = gazeSampleBuffer.length % 2 === 0
+    ? (xValues[mid - 1] + xValues[mid]) / 2
+    : xValues[mid]
+  const medianY = gazeSampleBuffer.length % 2 === 0
+    ? (yValues[mid - 1] + yValues[mid]) / 2
+    : yValues[mid]
+
+  let weightedX = 0
+  let weightedY = 0
+  let totalWeight = 0
+
+  for (let i = 0; i < gazeSampleBuffer.length; i++) {
+    const recency = (i + 1) / gazeSampleBuffer.length
+    const weight = Math.pow(recency, 2.2)
+    weightedX += gazeSampleBuffer[i].x * weight
+    weightedY += gazeSampleBuffer[i].y * weight
+    totalWeight += weight
+  }
+
+  const avgX = weightedX / totalWeight
+  const avgY = weightedY / totalWeight
+
+  const aggregatedX = medianX * MEDIAN_BLEND + avgX * WEIGHTED_BLEND
+  const aggregatedY = medianY * MEDIAN_BLEND + avgY * WEIGHTED_BLEND
+
+  // Measure noise level from spread around robust median
+  let spreadAccum = 0
+  for (const sample of gazeSampleBuffer) {
+    const dx = sample.x - medianX
+    const dy = sample.y - medianY
+    spreadAccum += Math.sqrt(dx * dx + dy * dy)
+  }
+  const avgSpread = spreadAccum / gazeSampleBuffer.length
+  const noiseLevel = Math.max(0, Math.min(1, avgSpread / NOISE_REFERENCE_SPREAD))
+
+  // Dynamic jitter threshold: larger when noisy
+  const jitterThreshold = BASE_JITTER_THRESHOLD + noiseLevel * 6
+
   // Check for outlier (sudden large jump)
   let isOutlier = false
   if (state.smoothedPosition) {
-    const dx = data.x - state.smoothedPosition.x
-    const dy = data.y - state.smoothedPosition.y
+    const dx = aggregatedX - state.smoothedPosition.x
+    const dy = aggregatedY - state.smoothedPosition.y
     const distance = Math.sqrt(dx * dx + dy * dy)
     isOutlier = distance > OUTLIER_THRESHOLD
   }
 
-  // Calculate weighted moving average from buffer
-  // More recent samples get higher weight
-  if (gazeSampleBuffer.length >= 3) {
-    let weightedX = 0
-    let weightedY = 0
-    let totalWeight = 0
+  if (state.smoothedPosition) {
+    const dx = aggregatedX - state.smoothedPosition.x
+    const dy = aggregatedY - state.smoothedPosition.y
+    const distance = Math.sqrt(dx * dx + dy * dy)
 
-    for (let i = 0; i < gazeSampleBuffer.length; i++) {
-      // Exponential weighting - newer samples have higher weight
-      const recency = (i + 1) / gazeSampleBuffer.length
-      const weight = Math.pow(recency, 2) // Quadratic weighting
+    if (distance > jitterThreshold) {
+      const adaptiveSmooth = NOISY_SMOOTHING_FACTOR + (1 - noiseLevel) * (BASE_SMOOTHING_FACTOR - NOISY_SMOOTHING_FACTOR)
+      const smoothFactor = isOutlier ? Math.min(adaptiveSmooth, OUTLIER_SMOOTHING_FACTOR) : adaptiveSmooth
 
-      weightedX += gazeSampleBuffer[i].x * weight
-      weightedY += gazeSampleBuffer[i].y * weight
-      totalWeight += weight
-    }
+      // Movement speed cap: noisier signal => slower allowed cursor movement
+      const dt = Math.max(16, now - lastFilteredUpdate)
+      const maxSpeed = MAX_CURSOR_SPEED_NOISY + (1 - noiseLevel) * (MAX_CURSOR_SPEED_STABLE - MAX_CURSOR_SPEED_NOISY)
+      const maxStep = (maxSpeed * dt) / 1000
 
-    const avgX = weightedX / totalWeight
-    const avgY = weightedY / totalWeight
+      const desiredStep = distance * smoothFactor
+      const clampedStep = Math.min(desiredStep, maxStep)
+      const stepScale = clampedStep / distance
 
-    // Apply smoothing based on whether this is an outlier
-    const smoothFactor = isOutlier ? OUTLIER_SMOOTHING : SMOOTHING_FACTOR
-
-    if (state.smoothedPosition) {
-      const dx = avgX - state.smoothedPosition.x
-      const dy = avgY - state.smoothedPosition.y
-      const distance = Math.sqrt(dx * dx + dy * dy)
-
-      // Only update if movement exceeds jitter threshold
-      if (distance > JITTER_THRESHOLD) {
-        state.smoothedPosition = {
-          x: state.smoothedPosition.x + dx * smoothFactor,
-          y: state.smoothedPosition.y + dy * smoothFactor,
-        }
+      state.smoothedPosition = {
+        x: state.smoothedPosition.x + dx * stepScale,
+        y: state.smoothedPosition.y + dy * stepScale,
       }
-    } else {
-      state.smoothedPosition = { x: avgX, y: avgY }
     }
-  } else if (!state.smoothedPosition) {
-    state.smoothedPosition = { x: data.x, y: data.y }
+  } else {
+    state.smoothedPosition = { x: aggregatedX, y: aggregatedY }
+  }
+
+  // Keep output in viewport bounds
+  if (state.smoothedPosition) {
+    const maxX = Math.max(0, window.innerWidth - 1)
+    const maxY = Math.max(0, window.innerHeight - 1)
+    state.smoothedPosition.x = Math.max(0, Math.min(maxX, state.smoothedPosition.x))
+    state.smoothedPosition.y = Math.max(0, Math.min(maxY, state.smoothedPosition.y))
   }
 
   // Use smoothed position for gaze
   state.gazePosition = state.smoothedPosition
+  lastFilteredUpdate = now
 
   // Find element at gaze position
-  const element = document.elementFromPoint(
-    state.smoothedPosition!.x,
-    state.smoothedPosition!.y
-  )
-  updateFocusedElement(element)
+  if (state.smoothedPosition) {
+    const element = document.elementFromPoint(
+      state.smoothedPosition.x,
+      state.smoothedPosition.y
+    )
+    updateFocusedElement(element)
+  }
 }
 
 /**
@@ -412,6 +485,8 @@ export function useEyeGaze() {
     state.isTracking = false
     state.gazePosition = null
     state.smoothedPosition = null
+    gazeSampleBuffer.length = 0
+    lastFilteredUpdate = 0
     stopDwellMonitor()
   }
 
@@ -480,6 +555,24 @@ export function useEyeGaze() {
       } catch (e) {
         console.warn('Could not clear webgazer data:', e)
       }
+
+      try {
+        if (webgazer.showVideoPreview) {
+          webgazer.showVideoPreview(true)
+        }
+        if (webgazer.showFaceOverlay) {
+          webgazer.showFaceOverlay(true)
+        }
+        if (webgazer.showFaceFeedbackBox) {
+          webgazer.showFaceFeedbackBox(true)
+        }
+        if (webgazer.showPredictionPoints) {
+          webgazer.showPredictionPoints(false)
+        }
+        state.videoFeedActive = true
+      } catch (e) {
+        console.warn('Could not enable implicit calibration preview:', e)
+      }
     }
   }
 
@@ -489,6 +582,24 @@ export function useEyeGaze() {
   function stopImplicitCalibration() {
     state.isImplicitCalibration = false
     state.isCalibrating = false
+
+    if (webgazer) {
+      try {
+        if (webgazer.showVideoPreview) {
+          webgazer.showVideoPreview(false)
+        }
+        if (webgazer.showFaceOverlay) {
+          webgazer.showFaceOverlay(false)
+        }
+        if (webgazer.showFaceFeedbackBox) {
+          webgazer.showFaceFeedbackBox(false)
+        }
+      } catch (e) {
+        console.warn('Could not disable implicit calibration preview:', e)
+      }
+    }
+
+    state.videoFeedActive = false
   }
 
   /**
@@ -590,6 +701,8 @@ export function useEyeGaze() {
   function resetSmoothing() {
     state.smoothedPosition = null
     lastRawPosition = null
+    gazeSampleBuffer.length = 0
+    lastFilteredUpdate = 0
   }
 
   /**

@@ -18,6 +18,7 @@ interface _GlobalComponents {
   'ControlPanel': typeof import("../../components/ControlPanel.vue").default
   'DebugPanel': typeof import("../../components/DebugPanel.vue").default
   'EyeGazeCalibration': typeof import("../../components/EyeGazeCalibration.vue").default
+  'EyeTrackingTopbarPreview': typeof import("../../components/EyeTrackingTopbarPreview.vue").default
   'GazeCursor': typeof import("../../components/GazeCursor.vue").default
   'NextSuggestionsButton': typeof import("../../components/NextSuggestionsButton.vue").default
   'PhraseCard': typeof import("../../components/PhraseCard.vue").default
@@ -70,6 +71,7 @@ interface _GlobalComponents {
   'LazyControlPanel': LazyComponent<typeof import("../../components/ControlPanel.vue").default>
   'LazyDebugPanel': LazyComponent<typeof import("../../components/DebugPanel.vue").default>
   'LazyEyeGazeCalibration': LazyComponent<typeof import("../../components/EyeGazeCalibration.vue").default>
+  'LazyEyeTrackingTopbarPreview': LazyComponent<typeof import("../../components/EyeTrackingTopbarPreview.vue").default>
   'LazyGazeCursor': LazyComponent<typeof import("../../components/GazeCursor.vue").default>
   'LazyNextSuggestionsButton': LazyComponent<typeof import("../../components/NextSuggestionsButton.vue").default>
   'LazyPhraseCard': LazyComponent<typeof import("../../components/PhraseCard.vue").default>

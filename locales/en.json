@@ -94,6 +94,40 @@
         },
         "hint": "Press Space or Enter to start"
     },
+    "calibration": {
+        "title": "Eye Gaze Setup",
+        "subtitle": "Follow the moving arrow and tap each circle 3 times.",
+        "zoneLabel": "Calibration points for speaking page gaze zones",
+        "progressLabel": "Calibration progress",
+        "currentTarget": "Current point: {target} ({group})",
+        "tapsRemaining": "Tap this point {count} more times",
+        "complete": "Finish calibration",
+        "cancel": "Cancel",
+        "groups": {
+            "cards": "Letter cards",
+            "suggestions": "Suggestion words",
+            "actions": "Action buttons"
+        },
+        "status": {
+            "loading": "Preparing eye tracker...",
+            "noCamera": "Camera not detected",
+            "mouseFallback": "Mouse fallback mode is active",
+            "ready": "Eye tracking is ready"
+        },
+        "instructions": {
+            "caregiverGuide": "Caregiver: tap only the highlighted circle while the user looks at it.",
+            "headStill": "Keep the head as still as possible.",
+            "eyeMovement": "Rely on eye movement more than head movement."
+        },
+        "zones": {
+            "card": "Card {number}",
+            "suggestion": "Suggestion {number}",
+            "speakButton": "Speak button",
+            "pauseButton": "Pause/Resume gaze button",
+            "backspaceButton": "Backspace button",
+            "spaceButton": "Space button"
+        }
+    },
     "speaking": {
         "actions": {
             "backspace": "backspace",

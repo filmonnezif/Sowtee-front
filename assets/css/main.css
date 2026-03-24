@@ -10,10 +10,10 @@
 
 @layer base {
   :root {
-    --aac-bg: 13 13 15;
-    --aac-surface: 21 21 24;
-    --aac-card: 28 28 33;
-    --aac-highlight: 59 130 246;
+    --aac-bg: 0 0 0;
+    --aac-surface: 18 18 18;
+    --aac-card: 24 24 27;
+    --aac-highlight: 234 179 8;
     --aac-text: 245 245 247;
   }
 

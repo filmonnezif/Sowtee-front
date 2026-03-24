@@ -270,6 +270,17 @@ export function useApi() {
     processing_time_ms: number
   }
 
+  interface SurroundingTranscriptionResponse {
+    text: string
+    language: string | null
+    duration: number | null
+    model: string | null
+    has_speech: boolean
+    avg_no_speech_prob: number | null
+    avg_logprob: number | null
+    speech_confidence: number | null
+  }
+
   /**
    * Get predictive text suggestions based on context and partial input
    */
@@ -310,6 +321,35 @@ export function useApi() {
       method: 'POST',
       body: JSON.stringify({ text }),
     })
+  }
+
+  /**
+   * Transcribe surrounding speech audio using backend Groq Whisper endpoint
+   */
+  async function transcribeSurroundingSpeech(
+    audioBlob: Blob,
+    language?: string
+  ): Promise<SurroundingTranscriptionResponse> {
+    const url = `${baseUrl}/api/v1/transcribe/surrounding`
+    const formData = new FormData()
+    const extension = audioBlob.type.includes('mp4') ? 'mp4' : 'webm'
+    formData.append('audio', audioBlob, `segment-${Date.now()}.${extension}`)
+
+    if (language) {
+      formData.append('language', language)
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const error = await response.text()
+      throw new Error(`API Error: ${response.status} - ${error}`)
+    }
+
+    return response.json()
   }
 
   // ============== Voice Cloning API ==============
@@ -469,6 +509,7 @@ export function useApi() {
     predictText,
     acceptSuggestion,
     formatText,
+    transcribeSurroundingSpeech,
     // Voice Cloning
     cloneVoice,
     getVoiceCloneStatus,

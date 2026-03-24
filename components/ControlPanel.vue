@@ -7,8 +7,13 @@
 import { Hand, Eye, ToggleRight, Lightbulb } from 'lucide-vue-next'
 import type { InteractionMode } from '~/types/api'
 const appStore = useAppStore()
-const eyeGaze = useEyeGaze()
-const gazeController = useGazeController()
+const route = useRoute()
+
+function buildCalibrationUrl(source: string) {
+  const returnTo = route.fullPath || '/speaking'
+  const params = new URLSearchParams({ returnTo, source })
+  return `/calibration?${params.toString()}`
+}
 
 const modes: Array<{ value: InteractionMode; label: string; icon: typeof Hand }> = [
   { value: 'touch', label: 'Touch', icon: Hand },
@@ -18,18 +23,25 @@ const modes: Array<{ value: InteractionMode; label: string; icon: typeof Hand }>
 
 const { t } = useI18n()
 
-function setMode(mode: InteractionMode) {
+async function setMode(mode: InteractionMode) {
   appStore.setInteractionMode(mode)
+
+  if (mode === 'eye_gaze') {
+    appStore.resetCalibration()
+    const returnTo = route.fullPath || '/speaking'
+    appStore.setCalibrationContext(returnTo, 'settings')
+    await navigateTo(buildCalibrationUrl('settings'))
+  }
 }
 
 /**
  * Start calibration process
  */
 async function startCalibration() {
-  appStore.eyeGazeCalibrated = false
-  gazeController.stop()
-  await eyeGaze.startTracking()
-  eyeGaze.startImplicitCalibration()
+  appStore.resetCalibration()
+  const returnTo = route.fullPath || '/speaking'
+  appStore.setCalibrationContext(returnTo, 'settings')
+  await navigateTo(buildCalibrationUrl('settings'))
 }
 </script>
 

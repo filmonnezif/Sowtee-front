@@ -3,7 +3,7 @@
  * SOWTEE Home Page
  * Interactive modern landing with 3D cards, scroll animations, and hero logo.
  */
-import { Eye, Mic, Globe, ArrowRight, Sparkles, Brain, Zap, Download } from 'lucide-vue-next'
+import { Globe, ArrowRight, Brain, Zap, Download } from 'lucide-vue-next'
 import gsap from 'gsap'
 
 const appStore = useAppStore()
@@ -22,14 +22,57 @@ const loginName = ref('')
 const heroLogoRef = ref<HTMLElement | null>(null)
 const heroTitleRef = ref<HTMLElement | null>(null)
 const heroDescRef = ref<HTMLElement | null>(null)
-const featureGridRef = ref<HTMLElement | null>(null)
-const featureCardsRef = ref<HTMLElement[]>([])
+const heroSubDescRef = ref<HTMLElement | null>(null)
 const ctaSectionRef = ref<HTMLElement | null>(null)
 const particlesRef = ref<HTMLElement | null>(null)
+const whyPanelsRef: HTMLElement[] = []
+const missionRef = ref<HTMLElement | null>(null)
+const missionVisible = ref(false)
+const activeWhyIndex = ref(0)
 const isMobile = ref(false)
 const isStandaloneApp = ref(false)
 const isIosSafari = ref(false)
 const canInstallApp = ref(false)
+const prefersReducedMotion = ref(false)
+const demoProgress = ref(0)
+const demoPhraseIndex = ref(0)
+
+let motionPreferenceQuery: MediaQueryList | null = null
+let whyObserver: IntersectionObserver | null = null
+let missionObserver: IntersectionObserver | null = null
+let revealObserver: IntersectionObserver | null = null
+let showcaseInterval: ReturnType<typeof setInterval> | null = null
+
+const scrollProgress = ref(0)
+
+const demoPhrases = [
+  'Eye-tracking + context-aware phrase prediction stream',
+  'Adaptive phrase ranking responds to live conversation context',
+  'Low-effort communication flow with scene-aware suggestions',
+]
+
+const currentDemoPhrase = computed(() => demoPhrases[demoPhraseIndex.value] || demoPhrases[0])
+
+const whyNarrative = [
+  {
+    pain: 'Sounds like a robot, not you',
+    detail: 'Old AAC gives everyone the same flat, mechanical voice. It stops feeling like you and starts feeling like a machine.',
+    solutionTitle: 'Your voice, cloned and kept alive',
+    solution: 'Sowtee clones your real voice from recordings. When it speaks, it sounds like you. People hear you, not a computer.',
+  },
+  {
+    pain: 'Too many buttons, too much effort',
+    detail: 'Traditional AAC makes you tap through endless grids. It\'s slow, tiring, and the moment is gone before you finish.',
+    solutionTitle: 'Just look. Sowtee gets it.',
+    solution: 'Select words with your eyes. No hands needed. Sowtee also learns your patterns so the right words appear before you search.',
+  },
+  {
+    pain: 'Suggestions that miss the point',
+    detail: 'Most AAC apps ignore what\'s happening around you. They suggest "hello" at dinner and "goodbye" when you just sat down.',
+    solutionTitle: 'Sees your world, says what matters',
+    solution: 'Sowtee reads your environment and conversation to suggest words that actually fit the moment. Less searching, more talking.',
+  },
+]
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>
@@ -66,6 +109,15 @@ function handleMouseMove(e: MouseEvent) {
 }
 
 function initGsapAnimations() {
+  if (prefersReducedMotion.value) {
+    if (heroLogoRef.value) gsap.set(heroLogoRef.value, { opacity: 1, y: 0, scale: 1 })
+    if (heroTitleRef.value) gsap.set(heroTitleRef.value, { opacity: 1, y: 0 })
+    if (heroDescRef.value) gsap.set(heroDescRef.value, { opacity: 1, y: 0 })
+    if (heroSubDescRef.value) gsap.set(heroSubDescRef.value, { opacity: 1, y: 0 })
+    if (ctaSectionRef.value) gsap.set(ctaSectionRef.value, { opacity: 1, y: 0 })
+    return
+  }
+
   // Hero entrance timeline
   const heroTl = gsap.timeline({ defaults: { ease: 'power3.out' } })
 
@@ -90,29 +142,12 @@ function initGsapAnimations() {
     )
   }
 
-  // Feature cards stagger entrance
-  if (featureCardsRef.value.length > 0) {
-    featureCardsRef.value.forEach((card, i) => {
-      gsap.fromTo(card,
-        {
-          y: 40,
-          opacity: 0,
-          rotateX: 10,
-          rotateY: i === 0 ? -8 : i === 2 ? 8 : 0,
-          scale: 0.92,
-        },
-        {
-          y: 0,
-          opacity: 1,
-          rotateX: 0,
-          rotateY: 0,
-          scale: 1,
-          duration: 0.8,
-          delay: 1.2 + i * 0.15,
-          ease: 'back.out(1.5)',
-        }
-      )
-    })
+  if (heroSubDescRef.value) {
+    heroTl.fromTo(heroSubDescRef.value,
+      { y: 24, opacity: 0 },
+      { y: 0, opacity: 1, duration: 0.7 },
+      '-=0.45'
+    )
   }
 
   // CTA entrance
@@ -141,36 +176,192 @@ function initGsapAnimations() {
   }
 }
 
-// 3D tilt effect for feature cards
-function handleCardMouseMove(e: MouseEvent, cardEl: HTMLElement) {
-  const rect = cardEl.getBoundingClientRect()
-  const x = e.clientX - rect.left
-  const y = e.clientY - rect.top
-  const centerX = rect.width / 2
-  const centerY = rect.height / 2
-  const rotateX = ((y - centerY) / centerY) * -8
-  const rotateY = ((x - centerX) / centerX) * 8
+function setWhyPanelRef(el: any, index: number) {
+  if (el) whyPanelsRef[index] = el as HTMLElement
+}
 
-  gsap.to(cardEl, {
-    rotateX,
-    rotateY,
-    transformPerspective: 800,
-    duration: 0.4,
-    ease: 'power2.out',
+function updateMotionPreference() {
+  prefersReducedMotion.value = motionPreferenceQuery?.matches ?? false
+}
+
+function initInspiraLikeObservers() {
+  if (whyObserver) whyObserver.disconnect()
+  if (missionObserver) missionObserver.disconnect()
+
+  whyObserver = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return
+        const panelIndex = whyPanelsRef.findIndex((panel) => panel === entry.target)
+        if (panelIndex >= 0) activeWhyIndex.value = panelIndex
+      })
+    },
+    {
+      root: null,
+      threshold: 0.65,
+    }
+  )
+
+  whyPanelsRef.forEach((panel) => {
+    if (panel) whyObserver?.observe(panel)
+  })
+
+  if (missionRef.value) {
+    missionObserver = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          missionVisible.value = true
+          missionObserver?.disconnect()
+          missionObserver = null
+        }
+      },
+      {
+        threshold: 0.25,
+      }
+    )
+
+    missionObserver.observe(missionRef.value)
+  }
+}
+
+function initProgressiveReveal() {
+  revealObserver?.disconnect()
+
+  const revealElements = Array.from(document.querySelectorAll<HTMLElement>('[data-reveal]'))
+  if (!revealElements.length) return
+
+  if (prefersReducedMotion.value) {
+    revealElements.forEach((el) => el.classList.add('is-visible'))
+    return
+  }
+
+  revealObserver = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return
+        entry.target.classList.add('is-visible')
+        revealObserver?.unobserve(entry.target)
+      })
+    },
+    {
+      rootMargin: '0px 0px -8% 0px',
+      threshold: 0.18,
+    }
+  )
+
+  revealElements.forEach((el) => revealObserver?.observe(el))
+}
+
+function updateScrollProgress() {
+  const maxScroll = document.documentElement.scrollHeight - window.innerHeight
+  if (maxScroll <= 0) {
+    scrollProgress.value = 0
+    return
+  }
+  scrollProgress.value = Math.min(100, Math.max(0, (window.scrollY / maxScroll) * 100))
+}
+
+function handleReactiveClick(event: MouseEvent) {
+  const target = event.currentTarget as HTMLElement | null
+  if (!target) return
+
+  const rect = target.getBoundingClientRect()
+  const x = event.clientX - rect.left
+  const y = event.clientY - rect.top
+  target.style.setProperty('--rx', `${x}px`)
+  target.style.setProperty('--ry', `${y}px`)
+
+  target.classList.remove('reactive-click')
+  void target.offsetWidth
+  target.classList.add('reactive-click')
+}
+
+function handleInteractiveSurfaceMove(event: Event) {
+  if (prefersReducedMotion.value) return
+
+  const mouseEvent = event as PointerEvent
+  const target = event.currentTarget as HTMLElement | null
+  if (!target) return
+
+  const rect = target.getBoundingClientRect()
+  const x = mouseEvent.clientX - rect.left
+  const y = mouseEvent.clientY - rect.top
+  const px = rect.width > 0 ? x / rect.width : 0.5
+  const py = rect.height > 0 ? y / rect.height : 0.5
+  const tiltX = (0.5 - py) * 8
+  const tiltY = (px - 0.5) * 10
+
+  target.style.setProperty('--mx', `${Math.round(px * 100)}%`)
+  target.style.setProperty('--my', `${Math.round(py * 100)}%`)
+  target.style.setProperty('--tiltX', `${tiltX.toFixed(2)}deg`)
+  target.style.setProperty('--tiltY', `${tiltY.toFixed(2)}deg`)
+  target.classList.add('interactive-surface--active')
+}
+
+function handleInteractiveSurfaceLeave(event: Event) {
+  const target = event.currentTarget as HTMLElement | null
+  if (!target) return
+
+  target.style.setProperty('--tiltX', '0deg')
+  target.style.setProperty('--tiltY', '0deg')
+  target.classList.remove('interactive-surface--active')
+}
+
+function setupInteractiveSurfaces() {
+  const surfaces = Array.from(document.querySelectorAll<HTMLElement>('.interactive-surface'))
+
+  surfaces.forEach((surface) => {
+    surface.removeEventListener('pointermove', handleInteractiveSurfaceMove)
+    surface.removeEventListener('pointerleave', handleInteractiveSurfaceLeave)
+    surface.addEventListener('pointermove', handleInteractiveSurfaceMove)
+    surface.addEventListener('pointerleave', handleInteractiveSurfaceLeave)
   })
 }
 
-function handleCardMouseLeave(cardEl: HTMLElement) {
-  gsap.to(cardEl, {
-    rotateX: 0,
-    rotateY: 0,
-    duration: 0.6,
-    ease: 'elastic.out(1, 0.5)',
+function teardownInteractiveSurfaces() {
+  const surfaces = Array.from(document.querySelectorAll<HTMLElement>('.interactive-surface'))
+  surfaces.forEach((surface) => {
+    surface.removeEventListener('pointermove', handleInteractiveSurfaceMove)
+    surface.removeEventListener('pointerleave', handleInteractiveSurfaceLeave)
+    surface.style.removeProperty('--tiltX')
+    surface.style.removeProperty('--tiltY')
+    surface.classList.remove('interactive-surface--active')
   })
 }
 
-function setFeatureCardRef(el: any, index: number) {
-  if (el) featureCardsRef.value[index] = el as HTMLElement
+function startShowcasePlayback() {
+  if (showcaseInterval) {
+    clearInterval(showcaseInterval)
+    showcaseInterval = null
+  }
+
+  demoProgress.value = 0
+
+  if (prefersReducedMotion.value) return
+
+  showcaseInterval = setInterval(() => {
+    demoProgress.value += 2
+    if (demoProgress.value >= 100) {
+      demoProgress.value = 0
+      demoPhraseIndex.value = (demoPhraseIndex.value + 1) % demoPhrases.length
+    }
+  }, 90)
+}
+
+function stopShowcasePlayback() {
+  if (!showcaseInterval) return
+  clearInterval(showcaseInterval)
+  showcaseInterval = null
+}
+
+function scrollToWhy() {
+  const target = document.querySelector('.why-section') as HTMLElement | null
+  if (!target) return
+
+  target.scrollIntoView({
+    behavior: prefersReducedMotion.value ? 'auto' : 'smooth',
+    block: 'start',
+  })
 }
 
 onMounted(async () => {
@@ -180,17 +371,28 @@ onMounted(async () => {
   detectMobilePlatform()
   detectStandaloneMode()
 
+  motionPreferenceQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+  updateMotionPreference()
+  motionPreferenceQuery.addEventListener('change', updateMotionPreference)
+
   window.addEventListener('keydown', handleKeyDown)
   window.addEventListener('resize', updateTargetBounds)
   window.addEventListener('resize', updateViewportMode)
+  window.addEventListener('resize', updateScrollProgress)
   window.addEventListener('click', handleCalibrationClick)
   window.addEventListener('mousemove', handleMouseMove)
+  window.addEventListener('scroll', updateScrollProgress, { passive: true })
   window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt as EventListener)
   window.addEventListener('appinstalled', handleAppInstalled as EventListener)
 
   await nextTick()
   setupMinimalNavigation()
+  setupInteractiveSurfaces()
+  initInspiraLikeObservers()
+  initProgressiveReveal()
   initGsapAnimations()
+  startShowcasePlayback()
+  updateScrollProgress()
 
   gazeController.onSelect((targetId) => {
     if (targetId === 'try-demo') {
@@ -200,14 +402,17 @@ onMounted(async () => {
     }
   })
 
-  if (appStore.interactionMode === 'eye_gaze') {
-    await enableEyeGazeExperience()
-  }
+  // Eye gaze should not run on home page.
+  disableEyeGazeExperience()
 })
 
 watch(speakingCardRef, () => {
   if (minimalNav.navigableItems.value.length === 0) {
     nextTick(() => setupMinimalNavigation())
+  }
+
+  if (speakingCardRef.value && appStore.interactionMode === 'eye_gaze' && gazeController.state.isActive) {
+    nextTick(() => registerGazeTargets())
   }
 })
 
@@ -215,14 +420,27 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('resize', updateTargetBounds)
   window.removeEventListener('resize', updateViewportMode)
+  window.removeEventListener('resize', updateScrollProgress)
   window.removeEventListener('click', handleCalibrationClick)
   window.removeEventListener('mousemove', handleMouseMove)
+  window.removeEventListener('scroll', updateScrollProgress)
   window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt as EventListener)
   window.removeEventListener('appinstalled', handleAppInstalled as EventListener)
+  motionPreferenceQuery?.removeEventListener('change', updateMotionPreference)
+  whyObserver?.disconnect()
+  missionObserver?.disconnect()
+  revealObserver?.disconnect()
+  stopShowcasePlayback()
+  teardownInteractiveSurfaces()
   gazeController.stop()
   gazeController.clearTargets()
   minimalNav.clearFocus()
   camera.stopCamera()
+})
+
+watch(prefersReducedMotion, () => {
+  startShowcasePlayback()
+  setupInteractiveSurfaces()
 })
 
 function updateViewportMode() {
@@ -284,9 +502,6 @@ function setupMinimalNavigation() {
 
 function setSpeakingCardRef(el: any) {
   speakingCardRef.value = el as HTMLElement
-  if (el && appStore.interactionMode === 'eye_gaze') {
-    registerGazeTargets()
-  }
 }
 
 function registerGazeTargets() {
@@ -335,12 +550,14 @@ function disableEyeGazeExperience() {
 
 watch(
   () => appStore.interactionMode,
-  async (mode) => {
-    if (mode === 'eye_gaze') {
-      await enableEyeGazeExperience()
-    } else {
+  (mode) => {
+    // Keep eye gaze disabled on index regardless of mode.
+    if (mode !== 'eye_gaze') {
       disableEyeGazeExperience()
+      return
     }
+
+    disableEyeGazeExperience()
   }
 )
 
@@ -366,6 +583,13 @@ function completeCalibration() {
 }
 
 function openSpeaking() {
+  const shouldShowOnboarding = !appStore.hasCompletedOnboarding && !appStore.hasSkippedOnboarding
+
+  if (shouldShowOnboarding) {
+    navigateTo('/onboarding')
+    return
+  }
+
   navigateTo('/speaking')
 }
 
@@ -398,6 +622,10 @@ function loginWithName() {
 
 <template>
   <div class="home" @mousemove="handleMouseMove">
+    <div class="scroll-progress" aria-hidden="true">
+      <span class="scroll-progress__fill" :style="{ width: `${scrollProgress}%` }" />
+    </div>
+
     <video ref="videoRef" class="hidden" autoplay playsinline muted />
     <canvas ref="canvasRef" class="hidden" />
 
@@ -453,7 +681,7 @@ function loginWithName() {
 
     <main class="home__content">
       <!-- ===== HERO SECTION ===== -->
-      <section class="hero">
+      <section class="hero section-shell" data-reveal>
         <!-- Centered hero logo -->
         <div ref="heroLogoRef" class="hero__logo-wrapper">
           <img
@@ -465,12 +693,18 @@ function loginWithName() {
         </div>
 
         <h1 ref="heroTitleRef" class="hero__title">
-          Communicate
-          <span class="hero__title-accent">effortlessly</span>
+          <span class="hero__title-main">Bridging the</span>
+          <span class="hero__title-accent">Silence</span>
         </h1>
 
         <p ref="heroDescRef" class="hero__tagline">
-          The AAC voice that learns you.
+          <span class="hero__tagline-normal">Because every</span>
+          <span class="hero__tagline-accent">voice matters.</span>
+        </p>
+
+        <p ref="heroSubDescRef" class="hero__subtagline">
+          A self-learning AAC for
+          <span class="hero__subtagline-accent">people with MS and ALS.</span>
         </p>
 
         <!-- ===== CTA INLINE ===== -->
@@ -494,12 +728,12 @@ function loginWithName() {
 
           <button
             :ref="setSpeakingCardRef"
-            class="try-demo-btn navigable-item"
+            class="try-demo-btn navigable-item interactive-surface"
             :class="{
               'try-demo-btn--gaze-target': appStore.interactionMode === 'eye_gaze',
               'try-demo-btn--gaze-active': gazeController.state.currentTargetId === 'try-demo'
             }"
-            @click="openSpeaking"
+            @click="handleReactiveClick($event); openSpeaking()"
           >
             <span class="try-demo-btn__content">
               <span class="try-demo-btn__label">Try Demo</span>
@@ -529,7 +763,15 @@ function loginWithName() {
             <span>{{ installButtonLabel }}</span>
           </button>
 
-          <div class="scroll-indicator">
+          <div
+            class="scroll-indicator interactive-surface"
+            role="button"
+            tabindex="0"
+            aria-label="Scroll to feature sections"
+            @click="scrollToWhy"
+            @keydown.enter.prevent="scrollToWhy"
+            @keydown.space.prevent="scrollToWhy"
+          >
             <span class="scroll-indicator__text">Scroll down to see features</span>
             <div class="scroll-indicator__chevron" aria-hidden="true">⌄</div>
           </div>
@@ -537,92 +779,127 @@ function loginWithName() {
         </div>
       </section>
 
-      <!-- ===== FEATURE CARDS (3D) ===== -->
-      <section ref="featureGridRef" class="feature-grid" aria-label="Main features">
-        <article
-          :ref="(el) => setFeatureCardRef(el, 0)"
-          class="feature-card"
-          @mousemove="(e) => featureCardsRef[0] && handleCardMouseMove(e, featureCardsRef[0])"
-          @mouseleave="featureCardsRef[0] && handleCardMouseLeave(featureCardsRef[0])"
-        >
-          <div class="feature-card__icon-wrap feature-card__icon-wrap--blue">
-            <Eye :size="28" />
-          </div>
-          <h2>Low-effort input</h2>
-          <p>Eye gaze, joystick, arrow keys, plus natural keyboard and mouse input.</p>
-          <div class="feature-card__shine" />
-        </article>
+      <!-- ===== 1) WHY: STICKY SCROLL REVEAL ===== -->
+      <section class="why-section section-shell" aria-labelledby="why-heading" data-reveal>
+        <p class="section-eyebrow">Why Sowtee</p>
+        <h2 id="why-heading" class="section-title">Old AAC makes you wait. Sowtee makes you heard.</h2>
+        <p class="section-lead">Eye gaze. Voice cloning. Smart context. Speak fast, sound like yourself, and stay in control.</p>
 
-        <article
-          :ref="(el) => setFeatureCardRef(el, 1)"
-          class="feature-card feature-card--elevated"
-          @mousemove="(e) => featureCardsRef[1] && handleCardMouseMove(e, featureCardsRef[1])"
-          @mouseleave="featureCardsRef[1] && handleCardMouseLeave(featureCardsRef[1])"
-        >
-          <div class="feature-card__icon-wrap feature-card__icon-wrap--purple">
-            <Mic :size="28" />
-          </div>
-          <h2>Voice clone support</h2>
-          <p>Speak with a personalized voice that sounds closer to you.</p>
-          <div class="feature-card__shine" />
-        </article>
-
-        <article
-          :ref="(el) => setFeatureCardRef(el, 2)"
-          class="feature-card"
-          @mousemove="(e) => featureCardsRef[2] && handleCardMouseMove(e, featureCardsRef[2])"
-          @mouseleave="featureCardsRef[2] && handleCardMouseLeave(featureCardsRef[2])"
-        >
-          <div class="feature-card__icon-wrap feature-card__icon-wrap--teal">
-            <Globe :size="28" />
-          </div>
-          <h2>3-language support</h2>
-          <p>Use English, Arabic, and Urdu in one adaptive communication experience.</p>
-          <div class="feature-card__shine" />
-        </article>
-      </section>
-
-      <!-- ===== STATS ROW ===== -->
-      <section class="stats-section">
-        <div class="stat-item">
-          <div class="stat-item__icon"><Sparkles :size="20" /></div>
-          <div class="stat-item__value">Self-learning</div>
-          <div class="stat-item__label">Adapts to your patterns</div>
-        </div>
-        <div class="stats-divider" />
-        <div class="stat-item">
-          <div class="stat-item__icon"><Brain :size="20" /></div>
-          <div class="stat-item__value">Context-aware</div>
-          <div class="stat-item__label">Scene & conversation context</div>
-        </div>
-        <div class="stats-divider" />
-        <div class="stat-item">
-          <div class="stat-item__icon"><Zap :size="20" /></div>
-          <div class="stat-item__value">Low latency</div>
-          <div class="stat-item__label">Fast predictions for real talk</div>
-        </div>
-      </section>
-
-      <!-- ===== RECENT PHRASES ===== -->
-      <section v-if="appStore.sentenceHistory.length > 0" class="recent-sentences">
-        <p class="recent-sentences__label">Recent phrases</p>
-        <div class="recent-sentences__items">
-          <button
-            v-for="sentence in appStore.sentenceHistory.slice(0, 3)"
-            :key="sentence"
-            class="recent-sentence"
-            @click="tts.speak(sentence)"
+        <div class="why-comparison-flow" aria-live="polite" aria-label="Problem and solution comparison">
+          <div
+            v-for="(item, index) in whyNarrative"
+            :key="item.pain"
+            :ref="(el) => setWhyPanelRef(el, index)"
+            class="why-comparison-row"
+            :class="{ 'why-comparison-row--active': activeWhyIndex === index }"
+            data-reveal
           >
-            {{ sentence }}
-          </button>
+            <article class="why-card why-card--pain interactive-surface" tabindex="0" @click="handleReactiveClick">
+              <p class="why-card__tag">Traditional AAC Pain</p>
+              <div class="why-card__header">
+                <span class="why-card__index">0{{ index + 1 }}</span>
+                <h3>{{ item.pain }}</h3>
+              </div>
+              <p>{{ item.detail }}</p>
+            </article>
+
+            <article class="why-card why-card--solution interactive-surface" tabindex="0" @click="handleReactiveClick">
+              <p class="why-card__tag">SOWTEE Solution</p>
+              <h3>{{ item.solutionTitle }}</h3>
+              <p>{{ item.solution }}</p>
+            </article>
+          </div>
         </div>
+      </section>
+
+      <!-- ===== 2) VISUAL PROOF / DEMO SHOWCASE ===== -->
+      <section class="showcase-section section-shell" aria-labelledby="showcase-heading" data-reveal>
+        <p class="section-eyebrow">Visual Proof</p>
+        <h2 id="showcase-heading" class="section-title">See SOWTEE responding in real time</h2>
+
+        <div class="showcase-frame interactive-surface" role="img" aria-label="Demo preview placeholder for eye tracking and AI word prediction" tabindex="0" @click="handleReactiveClick">
+          <div class="showcase-frame__glow" aria-hidden="true" />
+          <div class="showcase-frame__header">
+            <span class="showcase-dot" />
+            <span class="showcase-dot" />
+            <span class="showcase-dot" />
+          </div>
+          <div class="showcase-frame__screen">
+            <div class="showcase-frame__badge">Auto-play demo placeholder</div>
+            <Transition name="demo-phrase" mode="out-in">
+              <p :key="currentDemoPhrase">{{ currentDemoPhrase }}</p>
+            </Transition>
+            <div class="showcase-frame__timeline" aria-hidden="true">
+              <span class="showcase-frame__timeline-fill" :style="{ width: `${demoProgress}%` }" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 3) KILLER FEATURES ===== -->
+      <section class="underhood-section section-shell" aria-labelledby="underhood-heading" data-reveal>
+        <p class="section-eyebrow">Killer Features</p>
+        <h2 id="underhood-heading" class="section-title">What makes Sowtee different</h2>
+
+        <div class="underhood-grid">
+          <article class="underhood-card interactive-surface" tabindex="0" data-reveal @click="handleReactiveClick">
+            <div class="underhood-card__icon"><Zap :size="22" /></div>
+            <h3>Effortless Input</h3>
+            <p>Use your eyes, a joystick, or simple arrow keys. Sowtee works with the input you have, not the input you lost.</p>
+          </article>
+
+          <article class="underhood-card interactive-surface" tabindex="0" data-reveal @click="handleReactiveClick">
+            <div class="underhood-card__icon"><Brain :size="22" /></div>
+            <h3>Sound Like Yourself</h3>
+            <p>ALS and MS can take your voice. Sowtee clones it so when you speak, people still hear you, not a robot.</p>
+          </article>
+
+          <article class="underhood-card interactive-surface" tabindex="0" data-reveal @click="handleReactiveClick">
+            <div class="underhood-card__icon"><Globe :size="22" /></div>
+            <h3>3 Languages, One App</h3>
+            <p>Switch between English, Arabic, and Urdu instantly. Speak in the language that feels like home.</p>
+          </article>
+        </div>
+      </section>
+
+      <!-- ===== 4) MISSION ===== -->
+      <section ref="missionRef" class="mission-section section-shell" aria-labelledby="mission-heading" data-reveal>
+        <p class="section-eyebrow">Our Mission</p>
+        <h2 id="mission-heading" class="section-title">Built with empathy. Engineered for dignity.</h2>
+
+        <div class="mission-content" :class="{ 'mission-content--visible': missionVisible }">
+          <p>
+            When someone loses the ability to speak, they don't lose what they want to say.
+            Sowtee (صوتي) exists so no one has to feel invisible. We help people with MS and ALS
+            communicate faster, with less fatigue, and with their own identity still intact.
+          </p>
+          <div class="maker-card interactive-surface" tabindex="0" @click="handleReactiveClick">
+            <blockquote class="maker-card__quote">
+              "For millions of years, mankind lived just like the animals.
+              Then something happened which unleashed the power of our imagination.
+              We learned to talk."
+            </blockquote>
+            <p class="maker-card__name">Stephen Hawking</p>
+            <p class="maker-card__bio">Physicist, author, and the world's most recognized AAC user.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 5) FINAL CTA ===== -->
+      <section class="final-cta section-shell" aria-labelledby="final-cta-heading" data-reveal>
+        <h2 id="final-cta-heading">Ready to reclaim your voice?</h2>
+        <button class="final-cta__button interactive-surface" @click="handleReactiveClick($event); openSpeaking()">
+          <span class="final-cta__button-text">Try the Demo</span>
+        </button>
       </section>
     </main>
 
-    <footer class="home-footer" v-if="!appStore.settingsExpanded">
-      <p class="keyboard-nav-hint">
-        Press <kbd>Enter</kbd> to start &bull; Arrow keys and Tab also work
-      </p>
+    <footer class="home-footer" v-if="!appStore.settingsExpanded" data-reveal>
+      <nav class="home-footer__links" aria-label="Footer links">
+        <a href="#" class="home-footer__link">Privacy Policy</a>
+        <a href="#" class="home-footer__link">Contact</a>
+      </nav>
+      <p class="keyboard-nav-hint">Press <kbd>Enter</kbd> to start</p>
     </footer>
   </div>
 </template>
@@ -696,7 +973,7 @@ function loginWithName() {
 
 /* ======================== HERO ======================== */
 .hero {
-  @apply flex flex-col items-center text-center gap-5 pt-2 md:pt-4;
+  @apply flex flex-col items-center text-center gap-5 pt-4 md:pt-5;
   min-height: calc(100vh - 4.5rem);
   justify-content: flex-start;
 }
@@ -720,19 +997,70 @@ function loginWithName() {
 }
 
 .hero__title {
-  @apply text-3xl sm:text-4xl md:text-6xl font-bold text-aac-text leading-tight tracking-tight;
+  @apply flex flex-row items-center justify-center;
+  @apply text-4xl sm:text-5xl md:text-7xl font-black text-aac-text leading-[1.16] tracking-[-0.02em] pb-2;
+  white-space: nowrap;
+  overflow: visible;
+  animation: title-float 6s ease-in-out infinite;
+}
+
+.hero__title-main {
+  @apply text-aac-text mr-2;
 }
 
 .hero__title-accent {
   @apply relative inline-block text-yellow-400;
+  text-shadow: 0 0 22px rgb(var(--aac-highlight) / 0.35);
+}
+
+@keyframes title-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
 }
 
 .hero__tagline {
-  @apply text-lg md:text-xl text-aac-muted font-medium;
+  @apply mt-1 flex flex-wrap items-center justify-center gap-2;
+  @apply text-lg md:text-2xl font-semibold;
+}
+
+.hero__tagline-normal {
+  @apply text-aac-muted;
+}
+
+.hero__tagline-accent {
+  @apply text-aac-highlight;
+  animation: accent-pulse 3.2s ease-in-out infinite;
+}
+
+.hero__subtagline {
+  @apply max-w-2xl px-2;
+  @apply text-sm sm:text-base md:text-lg text-aac-muted/90 leading-relaxed font-medium;
+  text-wrap: pretty;
+}
+
+.hero__subtagline-accent {
+  @apply text-aac-text font-semibold;
+}
+
+@keyframes accent-pulse {
+  0%, 100% {
+    opacity: 0.85;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-1px);
+  }
 }
 
 .scroll-indicator {
   @apply mt-2 flex flex-col items-center gap-1;
+  @apply cursor-pointer rounded-xl px-4 py-2 transition-all duration-200;
+}
+
+.scroll-indicator:hover,
+.scroll-indicator:focus-visible {
+  background: rgb(250 204 21 / 0.08);
 }
 
 .scroll-indicator__text {
@@ -749,123 +1077,281 @@ function loginWithName() {
   50% { transform: translateY(8px); opacity: 1; }
 }
 
-/* ======================== FEATURE CARDS (3D) ======================== */
-.feature-grid {
-  @apply grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8;
-  perspective: 1200px;
+/* ======================== SHARED SECTION TYPOGRAPHY ======================== */
+.section-eyebrow {
+  @apply text-xs md:text-sm uppercase tracking-[0.2em] text-yellow-300/90 font-semibold;
 }
 
-.feature-card {
-  @apply relative rounded-3xl p-6 md:p-8 flex flex-col gap-4;
-  @apply border border-white/[0.06] cursor-default;
-  background: linear-gradient(
-    145deg,
-    rgb(var(--aac-card) / 0.9) 0%,
-    rgb(var(--aac-surface) / 0.6) 100%
-  );
-  backdrop-filter: blur(20px);
-  transform-style: preserve-3d;
-  transition: box-shadow 0.4s ease, border-color 0.4s ease;
-  will-change: transform;
+.section-title {
+  @apply text-2xl sm:text-3xl md:text-4xl font-bold text-aac-text leading-tight;
+}
+
+.section-lead {
+  @apply text-sm md:text-base text-aac-muted/90 leading-relaxed max-w-4xl;
+}
+
+/* ======================== WHY SECTION ======================== */
+.why-section {
+  @apply pt-4 md:pt-8 flex flex-col gap-4;
+}
+
+.why-comparison-flow {
+  @apply mt-2 flex flex-col gap-5;
+}
+
+.why-comparison-row {
+  @apply grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5;
+}
+
+.why-card {
+  @apply rounded-3xl border border-white/[0.12] p-6 md:p-7;
+  @apply transition-all duration-300 h-full;
+  background: linear-gradient(145deg, rgb(var(--aac-card) / 0.9), rgb(var(--aac-surface) / 0.74));
+}
+
+.why-card__tag {
+  @apply text-xs uppercase tracking-[0.17em] text-yellow-300/95 font-semibold;
+}
+
+.why-card__header {
+  @apply mt-3 flex items-center gap-3;
+}
+
+.why-card__index {
+  @apply text-sm font-bold text-yellow-300;
+}
+
+.why-card h3 {
+  @apply text-xl md:text-2xl font-bold text-aac-text;
+}
+
+.why-card p {
+  @apply mt-3 text-sm md:text-base text-aac-muted leading-relaxed;
+}
+
+.why-card--pain {
+  border-color: rgb(255 255 255 / 0.08);
+  background: linear-gradient(145deg, rgb(9 9 9 / 0.96), rgb(21 21 21 / 0.88));
+}
+
+.why-card--pain .why-card__tag {
+  @apply text-white/60;
+}
+
+.why-card--pain h3 {
+  @apply text-white/90;
+}
+
+.why-card--pain p {
+  @apply text-white/70;
+}
+
+.why-card--solution {
+  border-color: rgb(250 204 21 / 0.7);
+  background: linear-gradient(145deg, rgb(44 34 9 / 0.94), rgb(68 50 10 / 0.84));
   box-shadow:
-    0 4px 24px -4px rgba(0, 0, 0, 0.3),
-    0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+    0 14px 34px -18px rgb(0 0 0 / 0.7),
+    0 0 20px rgb(250 204 21 / 0.14);
 }
 
-.feature-card:hover {
-  border-color: rgb(var(--aac-highlight) / 0.3);
+.why-card--solution .why-card__tag {
+  @apply text-yellow-200;
+}
+
+.why-card--solution h3 {
+  @apply text-white;
+}
+
+.why-card--solution p {
+  color: rgb(255 255 255 / 0.88);
+}
+
+.why-comparison-row--active .why-card {
+  border-color: rgb(250 204 21 / 0.42);
+}
+
+.why-comparison-row--active .why-card--solution {
+  border-color: rgb(250 204 21 / 0.92);
+  background: linear-gradient(145deg, rgb(58 43 10 / 0.95), rgb(86 62 11 / 0.88));
   box-shadow:
-    0 20px 60px -15px rgba(0, 0, 0, 0.5),
-    0 0 0 1px rgba(255, 255, 255, 0.06) inset,
-    0 0 40px -10px rgb(var(--aac-highlight) / 0.15);
+    0 0 30px rgb(250 204 21 / 0.2),
+    0 22px 50px -18px rgb(0 0 0 / 0.72);
+  transform: translateY(-2px);
 }
 
-.feature-card--elevated {
-  @apply md:-mt-4 md:mb-4;
+.why-comparison-row--active .why-card--pain {
+  border-color: rgb(255 255 255 / 0.16);
+  box-shadow: none;
 }
 
-.feature-card__icon-wrap {
-  @apply w-14 h-14 rounded-2xl flex items-center justify-center;
-  transform: translateZ(30px);
+/* ======================== SHOWCASE SECTION ======================== */
+.showcase-section {
+  @apply flex flex-col gap-4 pt-2;
 }
 
-.feature-card__icon-wrap--blue {
-  @apply text-blue-400;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(59, 130, 246, 0.05));
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.15);
+.showcase-frame {
+  @apply relative mt-2 rounded-3xl border border-yellow-300/45 overflow-hidden;
+  background: rgb(7 7 7 / 0.92);
+  box-shadow:
+    0 0 60px rgb(250 204 21 / 0.16),
+    0 20px 60px -20px rgba(0, 0, 0, 0.7);
 }
 
-.feature-card__icon-wrap--purple {
-  @apply text-purple-400;
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(139, 92, 246, 0.05));
-  box-shadow: 0 0 20px rgba(139, 92, 246, 0.15);
+.showcase-frame__glow {
+  @apply absolute inset-0 pointer-events-none;
+  background: radial-gradient(circle at 50% 50%, rgb(250 204 21 / 0.16), transparent 70%);
 }
 
-.feature-card__icon-wrap--teal {
-  @apply text-teal-400;
-  background: linear-gradient(135deg, rgba(20, 184, 166, 0.2), rgba(20, 184, 166, 0.05));
-  box-shadow: 0 0 20px rgba(20, 184, 166, 0.15);
+.showcase-frame__header {
+  @apply relative z-10 flex items-center gap-2 px-5 py-3 border-b border-white/[0.08];
 }
 
-.feature-card h2 {
-  @apply text-xl font-bold text-aac-text;
-  transform: translateZ(20px);
+.showcase-dot {
+  @apply w-2.5 h-2.5 rounded-full;
+  background: rgb(250 204 21 / 0.8);
 }
 
-.feature-card p {
-  @apply text-sm text-aac-muted leading-relaxed;
-  transform: translateZ(10px);
+.showcase-frame__screen {
+  @apply relative z-10 min-h-[320px] md:min-h-[420px] p-6 md:p-10;
+  @apply flex flex-col justify-center items-center text-center;
 }
 
-.feature-card__shine {
-  @apply absolute inset-0 rounded-3xl pointer-events-none opacity-0;
-  background: linear-gradient(
-    105deg,
-    transparent 40%,
-    rgba(255, 255, 255, 0.03) 45%,
-    rgba(255, 255, 255, 0.06) 50%,
-    rgba(255, 255, 255, 0.03) 55%,
-    transparent 60%
-  );
-  transition: opacity 0.4s ease;
+.showcase-frame__badge {
+  @apply mb-4 rounded-full border border-yellow-300/50 px-4 py-1.5;
+  @apply text-xs uppercase tracking-[0.16em] text-yellow-300 font-semibold;
+  background: rgb(250 204 21 / 0.12);
 }
 
-.feature-card:hover .feature-card__shine {
+.showcase-frame__screen p {
+  @apply text-lg md:text-2xl font-semibold text-white max-w-2xl;
+}
+
+.showcase-frame__timeline {
+  @apply mt-7 w-full max-w-2xl h-2 rounded-full bg-white/10 overflow-hidden;
+}
+
+.showcase-frame__timeline-fill {
+  @apply block h-full rounded-full;
+  width: 0%;
+  background: linear-gradient(90deg, rgb(250 204 21), rgb(255 241 161));
+  transition: width 0.09s linear;
+}
+
+.demo-phrase-enter-active,
+.demo-phrase-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.demo-phrase-enter-from,
+.demo-phrase-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+/* ======================== UNDER THE HOOD ======================== */
+.underhood-section {
+  @apply flex flex-col gap-4 pt-2;
+}
+
+.underhood-grid {
+  @apply grid grid-cols-1 md:grid-cols-3 gap-5 mt-2;
+}
+
+.underhood-card {
+  @apply rounded-2xl border border-white/[0.1] p-6;
+  @apply transition-all duration-300;
+  background: linear-gradient(145deg, rgb(var(--aac-card) / 0.92), rgb(var(--aac-surface) / 0.7));
+}
+
+.underhood-card:hover,
+.underhood-card:focus-visible {
+  border-color: rgb(250 204 21 / 0.65);
+  box-shadow: 0 0 30px rgb(250 204 21 / 0.15);
+  transform: translateY(-3px);
+}
+
+.underhood-card__icon {
+  @apply inline-flex items-center justify-center w-10 h-10 rounded-xl mb-4 text-yellow-300;
+  background: rgb(250 204 21 / 0.14);
+}
+
+.underhood-card h3 {
+  @apply text-xl font-bold text-white;
+}
+
+.underhood-card p {
+  @apply mt-3 text-sm text-aac-muted leading-relaxed;
+}
+
+/* ======================== MISSION & MAKER ======================== */
+.mission-section {
+  @apply pt-2;
+}
+
+.mission-content {
+  @apply mt-4 rounded-3xl border border-white/[0.1] p-6 md:p-8;
+  @apply transition-all duration-700;
+  background: linear-gradient(145deg, rgb(var(--aac-card) / 0.86), rgb(var(--aac-surface) / 0.68));
+  opacity: 0;
+  transform: translateY(18px);
+}
+
+.mission-content--visible {
   opacity: 1;
+  transform: translateY(0);
 }
 
-/* ======================== STATS ======================== */
-.stats-section {
-  @apply flex flex-col md:flex-row items-center justify-center gap-6 md:gap-10;
-  @apply rounded-3xl border border-white/[0.06] px-8 py-6;
-  background: linear-gradient(
-    135deg,
-    rgb(var(--aac-card) / 0.5) 0%,
-    rgb(var(--aac-surface) / 0.3) 100%
-  );
-  backdrop-filter: blur(16px);
+.mission-content > p {
+  @apply text-base md:text-lg text-white/95 leading-relaxed max-w-3xl;
 }
 
-.stat-item {
-  @apply flex flex-col items-center gap-1.5 text-center;
+.maker-card {
+  @apply mt-6 rounded-2xl border border-yellow-300/30 p-6;
+  background: rgb(250 204 21 / 0.08);
 }
 
-.stat-item__icon {
-  @apply w-10 h-10 rounded-xl flex items-center justify-center mb-1;
-  @apply text-aac-highlight;
-  background: rgb(var(--aac-highlight) / 0.12);
+.maker-card__quote {
+  @apply text-lg md:text-xl text-white/90 leading-relaxed italic font-light;
 }
 
-.stat-item__value {
-  @apply text-lg font-bold text-aac-text;
+.maker-card__name {
+  @apply mt-4 text-xl font-black text-white;
 }
 
-.stat-item__label {
-  @apply text-xs text-aac-muted;
+.maker-card__bio {
+  @apply mt-1 text-sm md:text-base text-aac-muted leading-relaxed;
 }
 
-.stats-divider {
-  @apply hidden md:block w-px h-16 bg-white/[0.06];
+/* ======================== FINAL CTA ======================== */
+.final-cta {
+  @apply mt-1 mb-2 rounded-3xl border border-yellow-300/35 p-7 md:p-10;
+  @apply flex flex-col items-center text-center gap-5;
+  background: linear-gradient(145deg, rgb(10 10 10 / 0.92), rgb(20 20 20 / 0.78));
+}
+
+.final-cta h2 {
+  @apply text-3xl md:text-4xl font-black text-white;
+}
+
+.final-cta__button {
+  @apply relative rounded-xl px-8 py-3.5 text-base font-bold text-black;
+  background: linear-gradient(90deg, #facc15, #fde68a, #facc15);
+  background-size: 180% 180%;
+  animation: pulse-gradient 2.4s ease-in-out infinite;
+  box-shadow: 0 0 24px rgb(250 204 21 / 0.35);
+}
+
+.final-cta__button:hover {
+  transform: translateY(-1px);
+}
+
+.final-cta__button-text {
+  @apply relative z-10;
+}
+
+@keyframes pulse-gradient {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
 }
 
 /* ======================== CTA ======================== */
@@ -1006,33 +1492,77 @@ function loginWithName() {
 }
 
 .home-footer {
-  @apply relative z-10 pb-4 text-center;
+  @apply relative z-10 pb-8 text-center;
 }
 
-/* ======================== RECENT SENTENCES ======================== */
-.recent-sentences {
-  @apply pt-2 pb-10;
+.home-footer__links {
+  @apply mb-2 flex items-center justify-center gap-5;
 }
 
-.recent-sentences__label {
-  @apply text-sm text-aac-muted/60 text-center mb-3 uppercase tracking-widest;
+.home-footer__link {
+  @apply text-sm text-aac-muted underline-offset-4;
 }
 
-.recent-sentences__items {
-  @apply flex flex-wrap justify-center gap-3;
+.home-footer__link:hover {
+  @apply text-white underline;
 }
 
-.recent-sentence {
-  @apply px-5 py-2.5 rounded-full border border-white/[0.06];
-  @apply text-sm text-aac-muted transition-all duration-300;
-  background: rgb(var(--aac-card) / 0.5);
-  backdrop-filter: blur(8px);
+.home :is(button, a, input, [tabindex]):focus-visible {
+  outline: 2px solid rgb(250 204 21 / 1);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 3px rgb(250 204 21 / 0.24);
 }
 
-.recent-sentence:hover {
-  @apply text-white border-aac-highlight/40;
-  background: rgb(var(--aac-highlight) / 0.2);
-  box-shadow: 0 0 20px rgb(var(--aac-highlight) / 0.15);
-  @apply scale-105;
+.interactive-surface {
+  position: relative;
+  transform: perspective(900px) rotateX(var(--tiltX, 0deg)) rotateY(var(--tiltY, 0deg));
+  transform-style: preserve-3d;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  will-change: transform;
+}
+
+.interactive-surface::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(
+    220px 140px at var(--mx, 50%) var(--my, 50%),
+    rgb(255 255 255 / 0.12),
+    transparent 65%
+  );
+  transition: opacity 0.2s ease;
+}
+
+.interactive-surface--active::after,
+.interactive-surface:hover::after,
+.interactive-surface:focus-visible::after {
+  opacity: 1;
+}
+
+.reactive-click {
+  animation: reactive-click-pulse 0.45s ease-out;
+}
+
+@keyframes reactive-click-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgb(250 204 21 / 0.35);
+  }
+  100% {
+    box-shadow: 0 0 0 22px rgb(250 204 21 / 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 </style>

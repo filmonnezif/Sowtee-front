@@ -13,11 +13,12 @@ export interface NavigableItem {
   priority?: number
 }
 
-export function useMinimalNavigation() {
-  const navigableItems = ref<NavigableItem[]>([])
-  const currentIndex = ref<number>(-1)
-  const isShiftPressed = ref(false)
+const navigableItems = ref<NavigableItem[]>([])
+const currentIndex = ref<number>(-1)
+const isShiftPressed = ref(false)
+let listenerRefCount = 0
 
+export function useMinimalNavigation() {
   // Get current focused item
   const currentItem = computed(() => {
     return currentIndex.value >= 0 ? navigableItems.value[currentIndex.value] : null
@@ -348,6 +349,23 @@ export function useMinimalNavigation() {
     }
   }
 
+  function attachGlobalListeners() {
+    if (listenerRefCount === 0) {
+      window.addEventListener('keydown', handleKeyDown)
+      window.addEventListener('keyup', handleKeyUp)
+    }
+    listenerRefCount += 1
+  }
+
+  function detachGlobalListeners() {
+    listenerRefCount = Math.max(0, listenerRefCount - 1)
+    if (listenerRefCount === 0) {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+      isShiftPressed.value = false
+    }
+  }
+
   // Clear all highlights and focus
   function clearFocus() {
     navigableItems.value.forEach(item => {
@@ -366,13 +384,11 @@ export function useMinimalNavigation() {
   }
 
   onMounted(() => {
-    window.addEventListener('keydown', handleKeyDown)
-    window.addEventListener('keyup', handleKeyUp)
+    attachGlobalListeners()
   })
 
   onUnmounted(() => {
-    window.removeEventListener('keydown', handleKeyDown)
-    window.removeEventListener('keyup', handleKeyUp)
+    detachGlobalListeners()
     clearFocus()
   })
 

@@ -20,6 +20,7 @@ export interface SnapTarget {
   bounds: DOMRect | null // Visual center for snapping
   hitBounds: DOMRect | { top: number, left: number, width: number, height: number } | null // Active hit area
   priority: number // Higher priority targets are preferred when overlapping
+  paddingScale: number // Per-target padding multiplier (lower = more precise)
   weight: number // Usage/frequency weight (higher = more likely to select)
   lastSelectedTime: number // When this target was last selected
   selectionCount: number // How many times this target has been selected
@@ -49,10 +50,14 @@ const SIZE_INFLUENCE_FACTOR = 0.5 // How strongly size affects padding (inverse)
 const REFERENCE_SIZE = 200 // Size at which padding equals BASE_PADDING
 
 // Switching behavior - TUNED FOR EASIER SWITCHING
-const MIN_DWELL_BEFORE_SWITCH = 300 // Reduced from 300ms - allows faster switching
-const SWITCH_CONFIDENCE_THRESHOLD = 0.6 // Reduced from 0.6 - easier to switch
-const FAR_DISTANCE_MULTIPLIER = 2.2 // Reduced from 2.5 - easier to escape current target
-const SUSTAINED_AWAY_TIME = 300 // Reduced from 400ms - much faster response
+const MIN_DWELL_BEFORE_SWITCH = 260 // Keep initial lock responsive
+const SWITCH_CONFIDENCE_THRESHOLD = 0.64 // Slightly easier intentional switch
+const SWITCH_SCORE_GAP_THRESHOLD = 0.09 // Candidate must still clearly beat current target
+const FAR_DISTANCE_MULTIPLIER = 2.6 // Require clearer escape from current target
+const SUSTAINED_AWAY_TIME = 340 // Faster response without making switches accidental
+
+// Intentional unlock guard for densely packed targets
+const CURRENT_TARGET_STICKY_BONUS = 0.06
 
 // Smoothing and momentum
 const LOCK_SMOOTHING = 0.7 // Faster snap to target center
@@ -65,6 +70,10 @@ const PREDICTION_FACTOR = 8 // Reduced prediction for more direct control
 const RECENCY_DECAY = 2000 // Faster decay (2 seconds instead of 5)
 const SELECTION_WEIGHT_BOOST = 0.01 // Reduced from 0.05 - minimal sticky effect after selection
 const MAX_SELECTION_BONUS = 0.05 // Low cap on selection count bonus (reduced from 0.15)
+
+// Bottom-half bias tuning
+const BOTTOM_BIAS_STRENGTH = 0.18
+const BOTTOM_BIAS_START = 0.35
 
 // ==================== ENGLISH LETTER FREQUENCY ====================
 // Based on standard English letter frequency analysis
@@ -319,6 +328,19 @@ function calculateTargetScore(
   // Priority score (normalized)
   const priorityScore = Math.min(target.priority / 10, 1) * 0.15
 
+  // Bottom-half bias: favors lower-screen keyboard targets while still allowing top suggestions
+  const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 1000
+  const gazeYNorm = Math.max(0, Math.min(1, gazeY / viewportHeight))
+  const targetYNorm = Math.max(0, Math.min(1, center.y / viewportHeight))
+  const gazeIntent = Math.max(0, (gazeYNorm - BOTTOM_BIAS_START) / (1 - BOTTOM_BIAS_START))
+  const targetBottomness = Math.max(0, (targetYNorm - 0.4) / 0.6)
+  let bottomBiasScore = gazeIntent * targetBottomness * BOTTOM_BIAS_STRENGTH
+
+  // Keep upper suggestion chips selectable by reducing bottom penalty on them
+  if (target.id.startsWith('suggestion-chip-') || target.id === 'speak-btn') {
+    bottomBiasScore *= 0.45
+  }
+
   // Current target gets SMALL stability bonus based on dwell time (REDUCED from 0.4 to 0.15)
   let currentBonus = 0
   if (isCurrentTarget && state.dwellStartTime) {
@@ -330,7 +352,8 @@ function calculateTargetScore(
   // Gaze stability affects all scores (but less dramatically)
   const stabilityMultiplier = 0.7 + (state.gazeStability * 0.3)
 
-  const totalScore = (distanceScore + insideBonus + weightScore + priorityScore + currentBonus) * stabilityMultiplier
+  const stickyBonus = isCurrentTarget ? CURRENT_TARGET_STICKY_BONUS : 0
+  const totalScore = (distanceScore + insideBonus + weightScore + priorityScore + bottomBiasScore + currentBonus + stickyBonus) * stabilityMultiplier
 
   return totalScore
 }
@@ -346,6 +369,7 @@ function registerTarget(
   priority: number = 0,
   options: {
     hitBounds?: { top: number, left: number, width: number, height: number },
+    paddingScale?: number,
     weight?: number
   } = {}
 ) {
@@ -364,6 +388,7 @@ function registerTarget(
     bounds: element.getBoundingClientRect(),
     hitBounds: options.hitBounds || element.getBoundingClientRect(),
     priority,
+    paddingScale: options.paddingScale ?? existing?.paddingScale ?? 1,
     weight: options.weight ?? existing?.weight ?? 1,
     lastSelectedTime: existing?.lastSelectedTime ?? 0,
     selectionCount: existing?.selectionCount ?? 0,
@@ -448,7 +473,7 @@ function findBestTarget(x: number, y: number): { target: SnapTarget | null, conf
     if (!detectionBounds || !target.bounds) return
 
     const size = getTargetSize(target)
-    const dynamicPadding = getDynamicPadding(size)
+    const dynamicPadding = getDynamicPadding(size) * Math.max(0.35, target.paddingScale)
 
     // Check if within detection range (using dynamic padding)
     if (!isPointInExpandedBounds(projectedX, projectedY, detectionBounds, dynamicPadding)) return
@@ -485,6 +510,10 @@ function findBestTarget(x: number, y: number): { target: SnapTarget | null, conf
   if (currentTarget && bestCandidate.target.id !== state.currentTargetId) {
     // We have a current target and the best candidate is different
 
+    const currentScoreEntry = scoredTargets.find(item => item.target.id === state.currentTargetId)
+    const currentScore = currentScoreEntry?.score ?? 0
+    const scoreGap = bestCandidate.score - currentScore
+
     const currentCenter = getTargetCenter(currentTarget)
     const currentSize = getTargetSize(currentTarget)
 
@@ -512,15 +541,16 @@ function findBestTarget(x: number, y: number): { target: SnapTarget | null, conf
 
       const candidateDuration = Date.now() - candidateTarget.firstSeen
       const sustainedConfidence = candidateDuration >= SUSTAINED_AWAY_TIME
+      const hasScoreAdvantage = scoreGap >= SWITCH_SCORE_GAP_THRESHOLD
 
       // Decision to switch:
       // 1. Fast switch if very far from current (obvious intent to look elsewhere)
       // 2. Slow switch with high confidence and sustained gaze on new target
       const shouldSwitch = (
         // Fast switch: far away AND moving fast (scanning away)
-        (isFarFromCurrent && velocityMagnitude > 15) ||
+        (isFarFromCurrent && velocityMagnitude > 18 && hasScoreAdvantage) ||
         // Deliberate switch: enough dwell on current, sustained gaze on new, high confidence
-        (hasMinDwell && sustainedConfidence && candidateTarget.confidence >= SWITCH_CONFIDENCE_THRESHOLD)
+        (hasMinDwell && sustainedConfidence && hasScoreAdvantage && candidateTarget.confidence >= SWITCH_CONFIDENCE_THRESHOLD)
       )
 
       if (!shouldSwitch) {

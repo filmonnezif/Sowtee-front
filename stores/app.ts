@@ -66,6 +66,8 @@ export interface AppState {
   eyeGazeOverlayActive: boolean
   eyeGazeCalibrationActive: boolean
   eyeGazeCalibrated: boolean
+  eyeGazeCalibrationReturnTo: string
+  eyeGazeCalibrationSource: string | null
   dwellThreshold: number // ms before selection
   blinkDetectionEnabled: boolean
 
@@ -89,6 +91,10 @@ export interface AppState {
   // Voice Clone
   clonedVoiceId: string | null
   clonedVoiceName: string | null
+
+  // Onboarding
+  hasCompletedOnboarding: boolean
+  hasSkippedOnboarding: boolean
 }
 
 export const useAppStore = defineStore('app', {
@@ -123,6 +129,8 @@ export const useAppStore = defineStore('app', {
     eyeGazeOverlayActive: false,
     eyeGazeCalibrationActive: false,
     eyeGazeCalibrated: false,
+    eyeGazeCalibrationReturnTo: '/speaking',
+    eyeGazeCalibrationSource: null,
     dwellThreshold: 1500, // 1.5 seconds
     blinkDetectionEnabled: true,
     // Speech Recognition
@@ -147,6 +155,9 @@ export const useAppStore = defineStore('app', {
     // Voice Clone
     clonedVoiceId: null,
     clonedVoiceName: null,
+    // Onboarding
+    hasCompletedOnboarding: false,
+    hasSkippedOnboarding: false,
   }),
 
   getters: {
@@ -194,6 +205,13 @@ export const useAppStore = defineStore('app', {
 
       const storedUserId = localStorage.getItem('sowtee_user_id')
       const storedUserName = localStorage.getItem('sowtee_user_name')
+      const storedLanguage = localStorage.getItem('sowtee_language')
+      const storedInteractionMode = localStorage.getItem('sowtee_interaction_mode')
+      const storedOnboardingComplete = localStorage.getItem('sowtee_onboarding_complete')
+      const storedOnboardingSkipped = localStorage.getItem('sowtee_onboarding_skipped')
+
+      this.hasCompletedOnboarding = storedOnboardingComplete === 'true'
+      this.hasSkippedOnboarding = storedOnboardingSkipped === 'true'
 
       if (storedUserId) {
         this.userId = storedUserId
@@ -201,6 +219,19 @@ export const useAppStore = defineStore('app', {
 
       if (storedUserName) {
         this.userName = storedUserName
+      }
+
+      if (storedLanguage === 'en' || storedLanguage === 'ar' || storedLanguage === 'ur') {
+        this.language = storedLanguage
+      }
+
+      const onboardingDone = this.hasCompletedOnboarding || this.hasSkippedOnboarding
+
+      if (!onboardingDone) {
+        this.interactionMode = 'touch'
+        localStorage.setItem('sowtee_interaction_mode', 'touch')
+      } else if (storedInteractionMode === 'touch' || storedInteractionMode === 'eye_gaze' || storedInteractionMode === 'switch') {
+        this.interactionMode = storedInteractionMode
       }
     },
 
@@ -333,6 +364,10 @@ export const useAppStore = defineStore('app', {
 
     setInteractionMode(mode: InteractionMode) {
       this.interactionMode = mode
+
+      if (import.meta.client) {
+        localStorage.setItem('sowtee_interaction_mode', mode)
+      }
     },
 
     setProcessing(isProcessing: boolean) {
@@ -355,6 +390,38 @@ export const useAppStore = defineStore('app', {
 
     setLanguage(lang: 'en' | 'ar' | 'ur') {
       this.language = lang
+
+      if (import.meta.client) {
+        localStorage.setItem('sowtee_language', lang)
+      }
+    },
+
+    completeOnboarding() {
+      this.hasCompletedOnboarding = true
+      this.hasSkippedOnboarding = false
+
+      if (import.meta.client) {
+        localStorage.setItem('sowtee_onboarding_complete', 'true')
+        localStorage.removeItem('sowtee_onboarding_skipped')
+      }
+    },
+
+    skipOnboarding() {
+      this.hasSkippedOnboarding = true
+
+      if (import.meta.client) {
+        localStorage.setItem('sowtee_onboarding_skipped', 'true')
+      }
+    },
+
+    resetOnboarding() {
+      this.hasCompletedOnboarding = false
+      this.hasSkippedOnboarding = false
+
+      if (import.meta.client) {
+        localStorage.removeItem('sowtee_onboarding_complete')
+        localStorage.removeItem('sowtee_onboarding_skipped')
+      }
     },
 
     setCaptureInterval(ms: number) {
@@ -383,11 +450,18 @@ export const useAppStore = defineStore('app', {
       this.eyeGazeCalibrationActive = true
     },
 
+    setCalibrationContext(returnTo: string = '/speaking', source: string | null = null) {
+      this.eyeGazeCalibrationReturnTo = returnTo
+      this.eyeGazeCalibrationSource = source
+    },
+
     endCalibration(completed: boolean = false) {
       this.eyeGazeCalibrationActive = false
       if (completed) {
         this.eyeGazeCalibrated = true
       }
+      this.eyeGazeCalibrationReturnTo = '/speaking'
+      this.eyeGazeCalibrationSource = null
     },
 
     resetCalibration() {

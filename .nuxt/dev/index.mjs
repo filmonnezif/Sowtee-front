@@ -2568,7 +2568,7 @@ function findBrowserLocale(locales, browserLocales) {
   return matchedLocales.sort(compareBrowserLocale).at(0)?.code ?? "";
 }
 
-const appHead = {"meta":[{"charset":"utf-8"},{"name":"viewport","content":"width=device-width, initial-scale=1, viewport-fit=cover"},{"name":"theme-color","content":"#0f172a"},{"name":"mobile-web-app-capable","content":"yes"},{"name":"apple-mobile-web-app-capable","content":"yes"},{"name":"apple-mobile-web-app-status-bar-style","content":"default"},{"name":"apple-mobile-web-app-title","content":"SOWTEE"},{"name":"description","content":"SOWTEE - The Self-Learning, Context-Aware Agentic Communication Bridge for AAC"}],"link":[{"rel":"apple-touch-icon","href":"/icons/apple-touch-icon.png"},{"rel":"stylesheet","href":"https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;600;700;800&display=swap"}],"style":[],"script":[],"noscript":[],"title":"SOWTEE - صوتي","htmlAttrs":{}};
+const appHead = {"meta":[{"charset":"utf-8"},{"name":"viewport","content":"width=device-width, initial-scale=1, viewport-fit=cover"},{"name":"theme-color","content":"#0f172a"},{"name":"mobile-web-app-capable","content":"yes"},{"name":"apple-mobile-web-app-capable","content":"yes"},{"name":"apple-mobile-web-app-status-bar-style","content":"default"},{"name":"apple-mobile-web-app-title","content":"SOWTEE"},{"name":"description","content":"SOWTEE - The Self-Learning, Context-Aware Agentic Communication Bridge for AAC"}],"link":[{"rel":"icon","type":"image/x-icon","href":"/icons/favicon.ico"},{"rel":"icon","type":"image/png","sizes":"32x32","href":"/icons/favicon-32x32.png"},{"rel":"icon","type":"image/png","sizes":"16x16","href":"/icons/favicon-16x16.png"},{"rel":"shortcut icon","href":"/icons/favicon.ico"},{"rel":"apple-touch-icon","href":"/icons/apple-touch-icon.png"},{"rel":"manifest","href":"/manifest.webmanifest"},{"rel":"stylesheet","href":"https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;600;700;800&display=swap"}],"style":[],"script":[],"noscript":[],"title":"SOWTEE - صوتي","htmlAttrs":{}};
 
 const appRootTag = "div";
 
@@ -2767,7 +2767,7 @@ const _9xbT2sdJ0mOBRgffapnPZVe3I1h04h5eqSnboKfSY = defineNitroPlugin(async (nitr
     const localeSegment = detector.route(event.path);
     const pathLocale = isSupportedLocale(localeSegment) && localeSegment || void 0;
     const path = (pathLocale && url.pathname.slice(pathLocale.length + 1)) ?? url.pathname;
-    if (!url.pathname.includes("/_i18n/t1YXHHaH") && !isExistingNuxtRoute(path)) {
+    if (!url.pathname.includes("/_i18n/S4nn_Agk") && !isExistingNuxtRoute(path)) {
       return;
     }
     const resolved = resolveRedirectPath(event, path, pathLocale, ctx.vueI18nOptions.defaultLocale, detector);

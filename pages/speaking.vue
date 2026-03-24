@@ -5,7 +5,7 @@
  * Layout: 5 cards at corners, text field in center with ghost text + suggestion chips.
  */
 
-import { Volume2, Loader2, Plus, Delete, Space } from 'lucide-vue-next'
+import { Volume2, Loader2, Plus, Delete, Space, Mic } from 'lucide-vue-next'
 const appStore = useAppStore()
 const speakingStore = useSpeakingStore()
 const api = useApi()
@@ -25,7 +25,9 @@ const textFieldAutocompleteRef = ref<HTMLElement | null>(null)
 const backspaceKeyRef = ref<HTMLElement | null>(null)
 const spaceKeyRef = ref<HTMLElement | null>(null)
 const suggestionChipRefs = ref<(HTMLElement | null)[]>([])
+const gazePauseToggleRef = ref<HTMLElement | null>(null)
 const isMobile = ref(false)
+const isGazeUserPaused = ref(false)
 
 // Dwell state for eye gaze
 const dwellProgress = ref(0)
@@ -131,8 +133,16 @@ watch(() => predictive.isFetching.value, (fetching) => {
   speakingStore.setFetchingSuggestions(fetching)
 })
 
-// Watch conversation history changes → re-fetch predictions (voice transcription triggers this)
-watch(() => speech.conversationHistory.value.length, () => {
+// Watch only reliable surrounding transcripts → re-fetch predictions
+watch(() => {
+  const lastReliableOther = [...speech.conversationHistory.value]
+    .reverse()
+    .find(turn => turn.speaker === 'other' && turn.text?.trim())
+
+  return lastReliableOther
+    ? `${lastReliableOther.timestamp?.toString() ?? ''}:${lastReliableOther.text}`
+    : ''
+}, () => {
   const convHistory = speech.conversationHistory.value.slice(-6).map(turn => ({
     speaker: turn.speaker,
     text: turn.text,
@@ -169,6 +179,9 @@ watch(() => appStore.sceneDescription, (newScene) => {
 watch(() => speakingStore.isExpanding, (isExpanding) => {
   if (appStore.interactionMode === 'eye_gaze') {
     gazeController.setPaused(isExpanding)
+    if (!isExpanding && gazeController.state.isActive) {
+      nextTick(() => registerGazeTargets())
+    }
   }
 })
 
@@ -368,6 +381,19 @@ function updateViewportMode() {
  * Handle gaze selection of a target
  */
 function handleGazeSelect(targetId: string) {
+  if (speakingStore.isSpeaking) {
+    return
+  }
+
+  if (targetId === 'gaze-pause-toggle') {
+    toggleGazePause()
+    return
+  }
+
+  if (isGazeUserPaused.value) {
+    return
+  }
+
   if (targetId.startsWith('card-')) {
     const index = parseInt(targetId.replace('card-', ''))
     handleSelect(index)
@@ -389,6 +415,43 @@ function handleGazeSelect(targetId: string) {
   } else if (targetId.startsWith('suggestion-')) {
     handleSuggestionGaze(targetId)
   }
+}
+
+function toggleGazePause() {
+  if (appStore.interactionMode !== 'eye_gaze') return
+  isGazeUserPaused.value = !isGazeUserPaused.value
+  speakingStore.setHighlightedIndex(null)
+
+  if (gazeController.state.isActive && !gazeController.state.isPaused) {
+    nextTick(() => registerGazeTargets())
+  }
+}
+
+function getPreciseHitBounds(
+  element: HTMLElement,
+  options: { horizontalInsetRatio?: number; verticalInsetRatio?: number } = {}
+) {
+  const rect = element.getBoundingClientRect()
+  const horizontalInsetRatio = options.horizontalInsetRatio ?? 0
+  const verticalInsetRatio = options.verticalInsetRatio ?? 0
+
+  const insetX = Math.max(0, rect.width * horizontalInsetRatio)
+  const insetY = Math.max(0, rect.height * verticalInsetRatio)
+
+  return {
+    top: rect.top + insetY,
+    left: rect.left + insetX,
+    width: Math.max(24, rect.width - insetX * 2),
+    height: Math.max(24, rect.height - insetY * 2),
+  }
+}
+
+function isBottomPriorityCard(index: number): boolean {
+  if (useArabicCardsGrid.value) {
+    return index >= 4
+  }
+
+  return index >= 3
 }
 
 function handleSuggestionGaze(targetId: string) {
@@ -446,42 +509,101 @@ async function startCalibration() {
  * Register all gaze targets
  */
 function registerGazeTargets() {
+  gazeController.clearTargets()
+
+  if (gazePauseToggleRef.value) {
+    gazeController.registerTarget('gaze-pause-toggle', gazePauseToggleRef.value, 20, {
+      weight: 1.2,
+      paddingScale: 1.3,
+      hitBounds: getPreciseHitBounds(gazePauseToggleRef.value, {
+        horizontalInsetRatio: 0,
+        verticalInsetRatio: 0,
+      }),
+    })
+  }
+
+  if (isGazeUserPaused.value) {
+    return
+  }
+
   // Register card targets
   cardRefs.value.forEach((el, index) => {
     if (el) {
-      gazeController.registerTarget(`card-${index}`, el, 5)
+      gazeController.registerTarget(`card-${index}`, el, 5, {
+        weight: isBottomPriorityCard(index) ? 1.2 : 1,
+        paddingScale: 0.9,
+        hitBounds: getPreciseHitBounds(el, {
+          horizontalInsetRatio: 0.02,
+          verticalInsetRatio: 0.02,
+        }),
+      })
     }
   })
   
   // Register speak with higher priority
   if (speakBtnRef.value) {
-    gazeController.registerTarget('speak-btn', speakBtnRef.value, 8)
+    gazeController.registerTarget('speak-btn', speakBtnRef.value, 8, {
+      weight: 0.95,
+      paddingScale: 0.85,
+      hitBounds: getPreciseHitBounds(speakBtnRef.value, {
+        horizontalInsetRatio: 0.04,
+        verticalInsetRatio: 0.04,
+      }),
+    })
   }
 
   // Register keyboard action keys
   if (backspaceKeyRef.value) {
-    gazeController.registerTarget('backspace-key', backspaceKeyRef.value, 8)
+    gazeController.registerTarget('backspace-key', backspaceKeyRef.value, 8, {
+      weight: 1.25,
+      paddingScale: 0.72,
+      hitBounds: getPreciseHitBounds(backspaceKeyRef.value, {
+        horizontalInsetRatio: 0.06,
+        verticalInsetRatio: 0.05,
+      }),
+    })
   }
   
   // Register autocomplete zone on text field right half
   if (textFieldAutocompleteRef.value) {
-    gazeController.registerTarget('text-field-autocomplete', textFieldAutocompleteRef.value, 7)
+    gazeController.registerTarget('text-field-autocomplete', textFieldAutocompleteRef.value, 7, {
+      weight: 0.9,
+      paddingScale: 0.75,
+      hitBounds: getPreciseHitBounds(textFieldAutocompleteRef.value, {
+        horizontalInsetRatio: 0.04,
+        verticalInsetRatio: 0.08,
+      }),
+    })
   }
   
   if (spaceKeyRef.value) {
-    gazeController.registerTarget('space-key', spaceKeyRef.value, 8)
+    gazeController.registerTarget('space-key', spaceKeyRef.value, 8, {
+      weight: 1.35,
+      paddingScale: 0.7,
+      hitBounds: getPreciseHitBounds(spaceKeyRef.value, {
+        horizontalInsetRatio: 0.06,
+        verticalInsetRatio: 0.06,
+      }),
+    })
   }
   
   // Register suggestion chips as gaze targets
   suggestionChipRefs.value.forEach((el, index) => {
     if (el) {
-      gazeController.registerTarget(`suggestion-chip-${index}`, el, 7)
+      gazeController.registerTarget(`suggestion-chip-${index}`, el, 7, {
+        weight: 0.95,
+        paddingScale: 0.58,
+        hitBounds: getPreciseHitBounds(el, {
+          horizontalInsetRatio: 0.12,
+          verticalInsetRatio: 0.12,
+        }),
+      })
     }
   })
 }
 
 // Watch for card refs changes to re-register targets
-watch([cardRefs, speakBtnRef, textFieldAutocompleteRef, backspaceKeyRef, spaceKeyRef, suggestionChipRefs], () => {
+watch([cardRefs, speakBtnRef, textFieldAutocompleteRef, backspaceKeyRef, spaceKeyRef, suggestionChipRefs, gazePauseToggleRef], () => {
   if (gazeController.state.isActive) {
     registerGazeTargets()
   }
@@ -516,6 +638,7 @@ watch(() => speakingStore.level, async () => {
 // Watch for interaction mode changes
 watch(() => appStore.interactionMode, async (mode) => {
   if (mode === 'eye_gaze') {
+    isGazeUserPaused.value = false
     if (appStore.eyeGazeCalibrated) {
       await eyeGaze.startTracking()
       gazeController.start()
@@ -525,6 +648,7 @@ watch(() => appStore.interactionMode, async (mode) => {
       await startCalibration()
     }
   } else {
+    isGazeUserPaused.value = false
     gazeController.stop()
     eyeGaze.stopTracking()
     eyeGaze.stopImplicitCalibration()
@@ -555,6 +679,13 @@ async function initializeSpeakingSkill() {
  * Handle keyboard navigation
  */
 function handleKeyDown(e: KeyboardEvent) {
+  if (speakingStore.isSpeaking) {
+    if (e.code.startsWith('Arrow') || e.key === 'Tab' || e.code === 'Space' || e.code === 'Backspace' || e.code === 'Enter' || e.key === 'Shift') {
+      e.preventDefault()
+    }
+    return
+  }
+
   // Don't handle if suggestions panel is active - let minimal navigation handle it
   if (speakingStore.showSuggestions) {
     // Let minimal navigation handle arrow keys and tab/shift+tab
@@ -731,6 +862,8 @@ function handleSuggestionKeyDown(e: KeyboardEvent) {
  * Handle card or letter selection
  */
 async function handleSelect(index: number) {
+  if (speakingStore.isSpeaking) return
+
   try {
     if (speakingStore.level === 'cards') {
       // Select card - get spread letters
@@ -787,6 +920,8 @@ async function handleSelect(index: number) {
  * Handle accepting a predictive text suggestion
  */
 function handleAcceptSuggestion(suggestion: { text: string; confidence: number; is_completion: boolean }) {
+  if (speakingStore.isSpeaking) return
+
   if (suggestion.is_completion) {
     // Completion replaces current partial text
     speakingStore.setSentenceText(suggestion.text)
@@ -818,6 +953,8 @@ function handleAcceptSuggestion(suggestion: { text: string; confidence: number; 
  * Handle accepting the ghost text
  */
 function handleAcceptGhostText() {
+  if (speakingStore.isSpeaking) return
+
   const text = predictive.acceptGhostText()
   if (text) {
     speakingStore.setSentenceText(text)
@@ -1017,8 +1154,21 @@ const hasAnySentenceText = computed(() => {
   return speakingStore.fullSentence.trim().length > 0 || speakingStore.typedText.trim().length > 0
 })
 
+const surroundingVoiceLine = computed(() => {
+  const interim = speech.currentTranscript.value?.trim()
+  if (interim) return interim
+
+  const latestOther = [...speech.conversationHistory.value]
+    .reverse()
+    .find(turn => turn.speaker === 'other' && turn.text?.trim())
+
+  return latestOther?.text ?? ''
+})
+
 // Handle undo action (delegates to store)
 async function handleUndo() {
+  if (speakingStore.isSpeaking) return
+
   const before = speakingStore.typedText
   speakingStore.undo()
   const after = speakingStore.typedText
@@ -1067,7 +1217,7 @@ watch(() => appStore.language, async (newLang) => {
 </script>
 
 <template>
-  <div class="speaking-page">
+  <div class="speaking-page" :class="{ 'speaking-page--speaking': speakingStore.isSpeaking }">
     <!-- Hidden video/canvas for camera -->
     <!-- Gaze Cursor (when eye gaze mode is active) -->
     <GazeCursor
@@ -1083,6 +1233,22 @@ watch(() => appStore.language, async (newLang) => {
     <div v-if="!appStore.settingsExpanded && !speakingStore.showSuggestions" class="keyboard-nav-hint">
       Use arrow keys to navigate • Shift to click • Tab to cycle
     </div>
+
+    <div v-if="speakingStore.isSpeaking" class="interaction-lock-overlay" aria-hidden="true" />
+
+    <button
+      v-if="appStore.interactionMode === 'eye_gaze' && !eyeGaze.state.isImplicitCalibration"
+      ref="gazePauseToggleRef"
+      class="gaze-pause-toggle"
+      :class="{
+        'gaze-pause-toggle--active': isGazeUserPaused,
+        'gaze-pause-toggle--gaze-active': gazeController.state.currentTargetId === 'gaze-pause-toggle'
+      }"
+      :aria-pressed="isGazeUserPaused"
+      @click="toggleGazePause"
+    >
+      {{ isGazeUserPaused ? 'Resume gaze' : 'Pause gaze' }}
+    </button>
 
     <div class="speaking-layout" :dir="isRtl ? 'rtl' : 'ltr'">
       <div class="top-panel">
@@ -1139,20 +1305,38 @@ watch(() => appStore.language, async (newLang) => {
           </div>
         </div>
 
-        <button
-          ref="speakBtnRef"
-          class="action-btn action-btn--speak action-btn--inline navigable-item"
-          :class="{
-            'action-btn--loading': speakingStore.isSpeaking,
-            'action-btn--gaze-active': gazeController.state.currentTargetId === 'speak-btn'
-          }"
-          :disabled="!hasAnySentenceText || speakingStore.isSpeaking"
-          @click="handleInlineSpeak"
-        >
-          <Loader2 v-if="speakingStore.isSpeaking" :size="24" class="animate-spin" />
-          <Volume2 v-else :size="24" />
-          <span>Speak</span>
-        </button>
+        <div class="speak-inline-stack">
+          <button
+            ref="speakBtnRef"
+            class="action-btn action-btn--speak action-btn--inline navigable-item"
+            :class="{
+              'action-btn--loading': speakingStore.isSpeaking,
+              'action-btn--speaking': speakingStore.isSpeaking,
+              'action-btn--gaze-active': gazeController.state.currentTargetId === 'speak-btn'
+            }"
+            :disabled="!hasAnySentenceText || speakingStore.isSpeaking"
+            @click="handleInlineSpeak"
+          >
+            <template v-if="speakingStore.isSpeaking">
+              <div class="speak-anim" aria-hidden="true">
+                <span class="speak-anim__bar" />
+                <span class="speak-anim__bar" />
+                <span class="speak-anim__bar" />
+                <span class="speak-anim__bar" />
+              </div>
+              <span>Speaking...</span>
+            </template>
+            <template v-else>
+              <Volume2 :size="24" />
+              <span>Speak</span>
+            </template>
+          </button>
+
+          <div class="surrounding-voice-line" :title="surroundingVoiceLine">
+            <Mic :size="12" class="surrounding-voice-line__icon" aria-hidden="true" />
+            <span class="surrounding-voice-line__text">{{ surroundingVoiceLine }}</span>
+          </div>
+        </div>
 
         <div class="context-compact context-compact--hidden">
           <div class="scene-box scene-box--hidden">
@@ -1580,6 +1764,17 @@ watch(() => appStore.language, async (newLang) => {
   @apply box-border;
 }
 
+.speaking-page--speaking .keyboard-nav-hint,
+.speaking-page--speaking .gaze-pause-toggle {
+  @apply opacity-70;
+}
+
+.interaction-lock-overlay {
+  @apply fixed inset-0;
+  @apply z-[60];
+  @apply bg-transparent;
+}
+
 /* Main keyboard-style layout */
 .speaking-layout {
   @apply min-h-full w-full;
@@ -1893,8 +2088,91 @@ watch(() => appStore.language, async (newLang) => {
 }
 
 .action-btn--inline {
-  @apply h-20 w-32 flex-shrink-0;
+  @apply h-20 w-full;
   min-height: auto;
+}
+
+.speak-inline-stack {
+  @apply flex flex-col items-center gap-1.5 flex-shrink-0;
+  width: 8rem;
+}
+
+.surrounding-voice-line {
+  @apply w-full min-w-0;
+  @apply flex items-center gap-1.5;
+  @apply text-aac-muted;
+  @apply text-[11px] leading-none;
+  min-height: 1rem;
+}
+
+.surrounding-voice-line__icon {
+  @apply flex-shrink-0;
+}
+
+.surrounding-voice-line__text {
+  @apply min-w-0;
+  @apply overflow-hidden whitespace-nowrap text-ellipsis;
+}
+
+.action-btn--speaking {
+  @apply relative z-[70];
+  @apply border-aac-highlight;
+  background: linear-gradient(
+    135deg,
+    rgb(var(--aac-highlight) / 0.24) 0%,
+    rgb(var(--aac-highlight) / 0.1) 100%
+  );
+  box-shadow:
+    0 0 0 1px rgb(var(--aac-highlight) / 0.25),
+    0 0 24px rgb(var(--aac-highlight) / 0.35),
+    inset 0 0 28px rgb(var(--aac-highlight) / 0.12);
+  animation: speakPulse 1.6s ease-in-out infinite;
+}
+
+.speak-anim {
+  @apply flex items-end justify-center gap-1;
+  height: 1.5rem;
+}
+
+.speak-anim__bar {
+  width: 0.22rem;
+  height: 0.45rem;
+  border-radius: 9999px;
+  background: rgb(var(--aac-highlight) / 0.95);
+  box-shadow: 0 0 12px rgb(var(--aac-highlight) / 0.5);
+  animation: speakWave 0.9s ease-in-out infinite;
+}
+
+.speak-anim__bar:nth-child(2) {
+  animation-delay: 0.12s;
+}
+
+.speak-anim__bar:nth-child(3) {
+  animation-delay: 0.24s;
+}
+
+.speak-anim__bar:nth-child(4) {
+  animation-delay: 0.36s;
+}
+
+@keyframes speakWave {
+  0%, 100% {
+    transform: scaleY(0.55);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scaleY(1.9);
+    opacity: 1;
+  }
+}
+
+@keyframes speakPulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.04);
+  }
 }
 
 .action-btn:hover:not(:disabled) {
@@ -2217,6 +2495,26 @@ watch(() => appStore.language, async (newLang) => {
   @apply text-center;
 }
 
+.gaze-pause-toggle {
+  @apply fixed top-4 left-4 z-50;
+  @apply px-4 py-2 rounded-xl;
+  @apply border border-aac-surface;
+  @apply bg-aac-card/95 text-aac-text;
+  @apply text-sm font-semibold;
+  @apply transition-all duration-200;
+}
+
+.gaze-pause-toggle--active {
+  @apply border-aac-highlight text-aac-highlight;
+  background-color: rgb(var(--aac-highlight) / 0.15);
+}
+
+.gaze-pause-toggle--gaze-active {
+  @apply border-aac-highlight;
+  box-shadow: 0 0 20px rgb(var(--aac-highlight) / 0.35);
+  transform: scale(1.05);
+}
+
 /* Responsive layout for tablets */
 @media (max-width: 1024px) {
   .speaking-page {
@@ -2255,7 +2553,11 @@ watch(() => appStore.language, async (newLang) => {
   }
 
   .action-btn--inline {
-    @apply h-16 w-28;
+    @apply h-16;
+  }
+
+  .speak-inline-stack {
+    width: 7rem;
   }
 
   .text-field {
@@ -2296,7 +2598,11 @@ watch(() => appStore.language, async (newLang) => {
   }
 
   .action-btn--inline {
-    @apply h-24 rounded-xl self-center;
+    @apply h-24 rounded-xl w-full;
+  }
+
+  .speak-inline-stack {
+    @apply self-center;
     width: 58%;
     min-width: 9.5rem;
     max-width: 13rem;
@@ -2427,6 +2733,9 @@ watch(() => appStore.language, async (newLang) => {
 
   .action-btn--inline {
     @apply h-24;
+  }
+
+  .speak-inline-stack {
     width: 62%;
   }
 
