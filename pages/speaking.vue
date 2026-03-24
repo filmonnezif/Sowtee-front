@@ -5,7 +5,7 @@
  * Layout: 5 cards at corners, text field in center with ghost text + suggestion chips.
  */
 
-import { Volume2, Loader2, Plus, Delete, Space, Mic } from 'lucide-vue-next'
+import { Volume2, Loader2, Plus, Delete, Space, Mic, Eye, EyeOff } from 'lucide-vue-next'
 const appStore = useAppStore()
 const speakingStore = useSpeakingStore()
 const api = useApi()
@@ -1247,7 +1247,9 @@ watch(() => appStore.language, async (newLang) => {
       :aria-pressed="isGazeUserPaused"
       @click="toggleGazePause"
     >
-      {{ isGazeUserPaused ? 'Resume gaze' : 'Pause gaze' }}
+      <EyeOff v-if="isGazeUserPaused" :size="18" aria-hidden="true" />
+      <Eye v-else :size="18" aria-hidden="true" />
+      <span>{{ isGazeUserPaused ? 'Resume gaze' : 'Pause gaze' }}</span>
     </button>
 
     <div class="speaking-layout" :dir="isRtl ? 'rtl' : 'ltr'">
@@ -1759,8 +1761,8 @@ watch(() => appStore.language, async (newLang) => {
 /* Speaking Page - Dark Theme with Grid Layout */
 .speaking-page {
   @apply h-[100dvh] min-h-[100dvh] bg-aac-bg;
-  @apply relative overflow-x-hidden overflow-y-auto;
-  @apply px-12 pb-14 pt-20;
+  @apply relative overflow-x-hidden overflow-y-hidden;
+  @apply px-12 pb-14 pt-3;
   @apply box-border;
 }
 
@@ -1778,21 +1780,24 @@ watch(() => appStore.language, async (newLang) => {
 /* Main keyboard-style layout */
 .speaking-layout {
   @apply min-h-full w-full;
-  @apply flex flex-col gap-6;
+  @apply flex flex-col gap-4;
   @apply overflow-visible;
 }
 
 .top-panel {
   @apply flex items-start gap-6;
   flex: 0 0 auto;
-  min-height: 0;
-  @apply overflow-visible;
+  min-height: 15.5rem;
+  max-height: 15.5rem;
+  @apply overflow-hidden;
 }
 
 .keyboard-section {
   flex: 1 1 auto;
   min-height: 0;
-  @apply flex flex-col justify-center gap-8;
+  @apply flex flex-col justify-start gap-8;
+  padding-top: 0;
+  margin-top: -0.85rem;
   @apply overflow-visible;
 }
 
@@ -1803,6 +1808,7 @@ watch(() => appStore.language, async (newLang) => {
 
 .keyboard-row--top {
   @apply pb-1;
+  margin-bottom: 1.4rem;
 }
 
 .keyboard-row--bottom {
@@ -2325,6 +2331,7 @@ watch(() => appStore.language, async (newLang) => {
   @apply px-2;
   @apply w-full;
   @apply mt-2;
+  min-height: 3.75rem;
   @apply overflow-x-auto overflow-y-hidden;
 }
 
@@ -2334,28 +2341,37 @@ watch(() => appStore.language, async (newLang) => {
 
 .suggestion-chips--loading {
   @apply justify-center;
+  min-height: 3.75rem;
 }
 
 .suggestion-chip {
-  @apply px-6 py-3 rounded-xl;
+  @apply px-4 py-2 rounded-xl;
   @apply bg-aac-surface;
-  @apply text-aac-text text-lg font-medium;
+  @apply text-aac-text text-base font-medium;
   @apply border-2 border-aac-surface;
   @apply transition-all duration-200;
   @apply cursor-pointer;
   @apply text-center;
   @apply leading-snug;
+  @apply flex items-center justify-center;
+  height: 3.75rem;
+  min-height: 3.75rem;
+  max-height: 3.75rem;
   flex: 1 1 0;          /* Equal width for all 3 chips */
   min-width: 0;          /* Allow shrinking below content size */
   word-wrap: break-word; /* Wrap long words */
   overflow-wrap: break-word;
-  white-space: normal;   /* Allow text to wrap to next line */
+  white-space: normal;   /* Allow text to wrap */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .suggestion-chip:hover {
   @apply border-aac-highlight;
   background-color: rgb(var(--aac-highlight) / 0.15);
-  @apply scale-105;
 }
 
 .suggestion-chip--completion {
@@ -2496,11 +2512,14 @@ watch(() => appStore.language, async (newLang) => {
 }
 
 .gaze-pause-toggle {
-  @apply fixed top-4 left-4 z-50;
+  @apply fixed top-4 z-50;
+  left: 25%;
+  transform: translateX(-50%);
   @apply px-4 py-2 rounded-xl;
   @apply border border-aac-surface;
   @apply bg-aac-card/95 text-aac-text;
   @apply text-sm font-semibold;
+  @apply flex items-center gap-2;
   @apply transition-all duration-200;
 }
 
@@ -2512,17 +2531,18 @@ watch(() => appStore.language, async (newLang) => {
 .gaze-pause-toggle--gaze-active {
   @apply border-aac-highlight;
   box-shadow: 0 0 20px rgb(var(--aac-highlight) / 0.35);
-  transform: scale(1.05);
 }
 
 /* Responsive layout for tablets */
 @media (max-width: 1024px) {
   .speaking-page {
-    @apply px-6 pt-14 pb-10;
+    @apply px-6 pt-3 pb-10;
   }
 
   .top-panel {
     @apply gap-4;
+    min-height: 14.25rem;
+    max-height: 14.25rem;
   }
 
   .keyboard-row {
@@ -2568,7 +2588,7 @@ watch(() => appStore.language, async (newLang) => {
 /* Mobile-first adjustments for phone screens */
 @media (max-width: 768px) {
   .speaking-page {
-    @apply px-3 pt-4 pb-5;
+    @apply px-3 pt-1 pb-5;
   }
 
   .speaking-layout {
@@ -2577,11 +2597,16 @@ watch(() => appStore.language, async (newLang) => {
 
   .top-panel {
     @apply flex-col items-stretch gap-3;
-    margin-top: 4vh;
+    margin-top: 0;
+    min-height: auto;
+    max-height: none;
+    @apply overflow-visible;
   }
 
   .text-field-group {
     @apply w-full;
+    max-height: none;
+    @apply overflow-visible;
   }
 
   .text-field {
@@ -2691,10 +2716,14 @@ watch(() => appStore.language, async (newLang) => {
 
   .suggestion-chips {
     @apply gap-2 mt-1;
+    min-height: 3rem;
   }
 
   .suggestion-chip {
-    @apply px-3 py-2 text-sm rounded-lg;
+    @apply px-2.5 py-1.5 text-xs rounded-lg;
+    height: 3rem;
+    min-height: 3rem;
+    max-height: 3rem;
   }
 
   .keyboard-nav-hint {
@@ -2708,7 +2737,7 @@ watch(() => appStore.language, async (newLang) => {
 /* Small phone refinement */
 @media (max-width: 420px) {
   .top-panel {
-    margin-top: 6vh;
+    margin-top: 0;
   }
 
   .keyboard-stack-mobile .letter-card,
