@@ -8,12 +8,22 @@
 import { Settings, UserRound } from 'lucide-vue-next'
 
 const appStore = useAppStore()
+const route = useRoute()
 
 const userLabel = computed(() => appStore.userName || 'Guest')
 
 function toggleSettings() {
   appStore.toggleSettings()
 }
+
+watch(
+  [() => appStore.eyeGazeCalibrationActive, () => route.path],
+  ([isCalibrating, path]) => {
+    if ((isCalibrating || path === '/calibration') && appStore.settingsExpanded) {
+      appStore.setSettingsExpanded(false)
+    }
+  }
+)
 </script>
 
 <template>

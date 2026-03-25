@@ -1,16 +1,22 @@
 <script setup lang="ts">
-import { UserRound, Hand, Eye, ToggleRight, Globe, ArrowRight, ArrowLeft } from 'lucide-vue-next'
-import type { InteractionMode } from '~/types/api'
+import { UserRound, Hand, Eye, ToggleRight, Globe, Mic, Upload, Loader2, CheckCircle, ArrowRight, ArrowLeft } from 'lucide-vue-next'
+import type { InteractionMode, VoiceOption } from '~/types/api'
 
 const appStore = useAppStore()
+const api = useApi()
 const { $i18n } = useNuxtApp()
 
 const step = ref(0)
-const totalSteps = 3
+const totalSteps = 4
 
 const loginName = ref(appStore.userName)
 const selectedMode = ref<InteractionMode>('touch')
+const selectedVoice = ref<VoiceOption>(appStore.preferredVoice || 'male')
 const selectedLanguage = ref<'en' | 'ar' | 'ur'>(appStore.language || 'en')
+const voiceCloneFile = ref<File | null>(null)
+const isCloning = ref(false)
+const cloneError = ref('')
+const fileInputRef = ref<HTMLInputElement | null>(null)
 
 const modeOptions: Array<{ value: InteractionMode; label: string; sub: string; icon: typeof Hand }> = [
   { value: 'touch', label: 'Touch', sub: 'Best default for fast start', icon: Hand },
@@ -24,15 +30,23 @@ const languageOptions: Array<{ value: 'en' | 'ar' | 'ur'; label: string; sub: st
   { value: 'ur', label: 'اردو', sub: 'Urdu' },
 ]
 
+const voiceOptions: Array<{ value: VoiceOption; label: string; sub: string; icon: typeof Mic }> = [
+  { value: 'cloned', label: 'My Cloned Voice', sub: 'Use your saved ElevenLabs voice clone', icon: Mic },
+  { value: 'male', label: 'Adam (Male)', sub: 'Clear male voice', icon: Mic },
+  { value: 'female', label: 'Rachel (Female)', sub: 'Warm female voice', icon: Mic },
+]
+
 const currentTitle = computed(() => {
   if (step.value === 0) return 'Quick setup'
   if (step.value === 1) return 'Choose input mode'
+  if (step.value === 2) return 'Choose voice'
   return 'Choose language'
 })
 
 const currentHint = computed(() => {
   if (step.value === 0) return 'Optional. You can skip and start now.'
   if (step.value === 1) return 'Touch is preselected so you can move fast.'
+  if (step.value === 2) return 'Pick your speaking voice for text-to-speech.'
   return 'You can change this later in settings.'
 })
 
@@ -46,7 +60,61 @@ function goBack() {
 
 function goNext() {
   if (step.value >= totalSteps - 1) return
+  if (step.value === 2 && selectedVoice.value === 'cloned' && !appStore.clonedVoiceId) {
+    cloneError.value = 'Please upload a voice sample to use cloned voice.'
+    return
+  }
   step.value++
+}
+
+function ensureUserIdentityForClone() {
+  const trimmedName = loginName.value.trim()
+  if (trimmedName) {
+    appStore.loginWithName(trimmedName)
+  }
+}
+
+function onVoiceFileSelect(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (!input.files?.length) return
+
+  const file = input.files[0]
+  cloneError.value = ''
+
+  if (!file.type.startsWith('audio/')) {
+    cloneError.value = 'Please select an audio file.'
+    return
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    cloneError.value = 'File too large (max 5MB).'
+    return
+  }
+
+  voiceCloneFile.value = file
+}
+
+async function uploadVoiceClone() {
+  if (!voiceCloneFile.value || isCloning.value) return
+
+  isCloning.value = true
+  cloneError.value = ''
+
+  try {
+    ensureUserIdentityForClone()
+    const result = await api.cloneVoice(voiceCloneFile.value, appStore.userId, 'My Voice')
+    if (result.voice_id) {
+      appStore.setClonedVoice(result.voice_id, result.voice_name || 'My Voice')
+    }
+    voiceCloneFile.value = null
+    if (fileInputRef.value) {
+      fileInputRef.value.value = ''
+    }
+  } catch (error: any) {
+    cloneError.value = error?.message || 'Voice cloning failed.'
+  } finally {
+    isCloning.value = false
+  }
 }
 
 function markOnboardingCompleted() {
@@ -84,7 +152,14 @@ async function applyAndStart(markCompleted = true) {
     appStore.loginWithName(trimmedName)
   }
 
+  if (selectedVoice.value === 'cloned' && !appStore.clonedVoiceId) {
+    cloneError.value = 'Please upload a voice sample to use cloned voice.'
+    step.value = 2
+    return
+  }
+
   appStore.setInteractionMode(selectedMode.value)
+  appStore.setPreferredVoice(selectedVoice.value)
   appStore.setLanguage(selectedLanguage.value)
   await $i18n.setLocale(selectedLanguage.value)
 
@@ -109,6 +184,12 @@ onMounted(async () => {
 
   if (appStore.hasCompletedOnboarding || appStore.hasSkippedOnboarding) {
     await navigateTo('/speaking')
+  }
+})
+
+watch(selectedVoice, (voice) => {
+  if (voice !== 'cloned') {
+    cloneError.value = ''
   }
 })
 </script>
@@ -174,6 +255,56 @@ onMounted(async () => {
           </button>
         </div>
 
+        <div v-else-if="step === 2" class="onboarding-content onboarding-options">
+          <button
+            v-for="voice in voiceOptions"
+            :key="voice.value"
+            class="onboarding-option"
+            :class="{ 'onboarding-option--active': selectedVoice === voice.value }"
+            @click="selectedVoice = voice.value"
+          >
+            <div class="onboarding-option__icon">
+              <component :is="voice.icon" :size="18" />
+            </div>
+            <div class="onboarding-option__text">
+              <h3>{{ voice.label }}</h3>
+              <p>{{ voice.sub }}</p>
+            </div>
+          </button>
+
+          <div v-if="selectedVoice === 'cloned'" class="onboarding-clone-block">
+            <div v-if="appStore.clonedVoiceId" class="onboarding-clone-success">
+              <CheckCircle :size="16" class="text-green-400" />
+              <span>{{ appStore.clonedVoiceName || 'My Voice' }} is ready</span>
+            </div>
+
+            <div v-else class="onboarding-clone-upload">
+              <p class="onboarding-microcopy">Upload a 10–30 second audio sample to create your cloned voice.</p>
+
+              <input
+                ref="fileInputRef"
+                type="file"
+                accept="audio/*"
+                class="hidden"
+                @change="onVoiceFileSelect"
+              >
+
+              <button class="onboarding-upload-btn" @click="fileInputRef?.click()">
+                <Upload :size="16" />
+                <span>{{ voiceCloneFile ? voiceCloneFile.name : 'Choose audio file' }}</span>
+              </button>
+
+              <button class="onboarding-primary onboarding-clone-btn" :disabled="!voiceCloneFile || isCloning" @click="uploadVoiceClone">
+                <Loader2 v-if="isCloning" :size="16" class="animate-spin" />
+                <Upload v-else :size="16" />
+                <span>{{ isCloning ? 'Cloning...' : 'Clone voice' }}</span>
+              </button>
+
+              <p v-if="cloneError" class="onboarding-error">{{ cloneError }}</p>
+            </div>
+          </div>
+        </div>
+
         <div v-else class="onboarding-content onboarding-options">
           <button
             v-for="lang in languageOptions"
@@ -193,7 +324,12 @@ onMounted(async () => {
         </div>
 
         <div class="onboarding-actions">
-          <button v-if="step < totalSteps - 1" class="onboarding-primary" @click="goNext">
+          <button
+            v-if="step < totalSteps - 1"
+            class="onboarding-primary"
+            :disabled="step === 2 && selectedVoice === 'cloned' && !appStore.clonedVoiceId"
+            @click="goNext"
+          >
             Continue
             <ArrowRight :size="18" />
           </button>
@@ -321,7 +457,35 @@ onMounted(async () => {
   @apply inline-flex items-center gap-2 rounded-xl bg-aac-highlight px-5 py-2.5 font-semibold text-white transition-opacity;
 }
 
+.onboarding-primary:disabled {
+  @apply cursor-not-allowed opacity-60;
+}
+
 .onboarding-primary:hover {
   @apply opacity-90;
+}
+
+.onboarding-clone-block {
+  @apply rounded-2xl border border-white/10 bg-black/20 p-4;
+}
+
+.onboarding-clone-success {
+  @apply inline-flex items-center gap-2 text-sm text-aac-text;
+}
+
+.onboarding-clone-upload {
+  @apply flex flex-col gap-3;
+}
+
+.onboarding-upload-btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-aac-surface px-4 py-2 text-sm text-aac-text;
+}
+
+.onboarding-clone-btn {
+  @apply w-fit;
+}
+
+.onboarding-error {
+  @apply text-xs text-red-400;
 }
 </style>

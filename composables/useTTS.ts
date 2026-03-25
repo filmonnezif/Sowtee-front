@@ -14,6 +14,7 @@ export interface TTSState {
 }
 
 export function useTTS() {
+  const appStore = useAppStore()
   const state = reactive<TTSState>({
     isSupported: false,
     isSpeaking: false,
@@ -146,6 +147,8 @@ export function useTTS() {
         body: JSON.stringify({
           text,
           language: lang || 'en',
+          user_id: appStore.userId,
+          voice_option: appStore.preferredVoice,
           enrich_directions: true,
           ...(context?.scene_description && { scene_description: context.scene_description }),
           ...(context?.conversation_context && { conversation_context: context.conversation_context }),

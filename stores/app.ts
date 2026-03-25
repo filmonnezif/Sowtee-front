@@ -6,6 +6,7 @@
 import { defineStore } from 'pinia'
 import type {
   InteractionMode,
+  VoiceOption,
   PhraseCandidate,
   VisualContext,
   AgentPhase,
@@ -61,6 +62,7 @@ export interface AppState {
   captureInterval: number // ms
   showDebugInfo: boolean
   language: 'en' | 'ar' | 'ur'
+  preferredVoice: VoiceOption
 
   // Eye Gaze Settings
   eyeGazeOverlayActive: boolean
@@ -125,6 +127,7 @@ export const useAppStore = defineStore('app', {
     captureInterval: 3000, // 3 seconds
     showDebugInfo: false,
     language: 'en',
+    preferredVoice: 'male',
     // Eye Gaze
     eyeGazeOverlayActive: false,
     eyeGazeCalibrationActive: false,
@@ -206,6 +209,7 @@ export const useAppStore = defineStore('app', {
       const storedUserId = localStorage.getItem('sowtee_user_id')
       const storedUserName = localStorage.getItem('sowtee_user_name')
       const storedLanguage = localStorage.getItem('sowtee_language')
+      const storedPreferredVoice = localStorage.getItem('sowtee_preferred_voice')
       const storedInteractionMode = localStorage.getItem('sowtee_interaction_mode')
       const storedOnboardingComplete = localStorage.getItem('sowtee_onboarding_complete')
       const storedOnboardingSkipped = localStorage.getItem('sowtee_onboarding_skipped')
@@ -223,6 +227,10 @@ export const useAppStore = defineStore('app', {
 
       if (storedLanguage === 'en' || storedLanguage === 'ar' || storedLanguage === 'ur') {
         this.language = storedLanguage
+      }
+
+      if (storedPreferredVoice === 'cloned' || storedPreferredVoice === 'male' || storedPreferredVoice === 'female') {
+        this.preferredVoice = storedPreferredVoice
       }
 
       const onboardingDone = this.hasCompletedOnboarding || this.hasSkippedOnboarding
@@ -393,6 +401,14 @@ export const useAppStore = defineStore('app', {
 
       if (import.meta.client) {
         localStorage.setItem('sowtee_language', lang)
+      }
+    },
+
+    setPreferredVoice(voice: VoiceOption) {
+      this.preferredVoice = voice
+
+      if (import.meta.client) {
+        localStorage.setItem('sowtee_preferred_voice', voice)
       }
     },
 

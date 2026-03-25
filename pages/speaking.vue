@@ -655,6 +655,12 @@ watch(() => appStore.interactionMode, async (mode) => {
   }
 })
 
+watch(() => eyeGaze.state.isImplicitCalibration, (isCalibrating) => {
+  if (isCalibrating && appStore.settingsExpanded) {
+    appStore.setSettingsExpanded(false)
+  }
+})
+
 /**
  * Initialize the speaking skill - fetch letter cards
  */

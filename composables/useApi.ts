@@ -363,10 +363,16 @@ export function useApi() {
   /**
    * Clone a voice from an audio file
    */
-  async function cloneVoice(file: File): Promise<VoiceCloneStatus & { status: string }> {
+  async function cloneVoice(
+    file: File,
+    userId: string,
+    voiceName: string = 'My Voice',
+  ): Promise<VoiceCloneStatus & { status: string; user_id?: string }> {
     const url = `${baseUrl}/api/v1/voice/clone`
     const formData = new FormData()
     formData.append('file', file)
+    formData.append('user_id', userId)
+    formData.append('voice_name', voiceName)
 
     const response = await fetch(url, {
       method: 'POST',
@@ -384,15 +390,15 @@ export function useApi() {
   /**
    * Get voice clone status
    */
-  async function getVoiceCloneStatus(): Promise<VoiceCloneStatus> {
-    return request<VoiceCloneStatus>('/api/v1/voice/clone')
+  async function getVoiceCloneStatus(userId: string): Promise<VoiceCloneStatus> {
+    return request<VoiceCloneStatus>(`/api/v1/voice/clone?user_id=${encodeURIComponent(userId)}`)
   }
 
   /**
    * Remove cloned voice and revert to default
    */
-  async function removeClonedVoice(): Promise<{ status: string }> {
-    return request<{ status: string }>('/api/v1/voice/clone', {
+  async function removeClonedVoice(userId: string): Promise<{ status: string }> {
+    return request<{ status: string }>(`/api/v1/voice/clone?user_id=${encodeURIComponent(userId)}`, {
       method: 'DELETE',
     })
   }

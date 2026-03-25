@@ -5,6 +5,8 @@
 
 export type InteractionMode = 'touch' | 'eye_gaze' | 'switch'
 
+export type VoiceOption = 'cloned' | 'male' | 'female'
+
 export type AgentPhase = 'perceive' | 'reason' | 'act' | 'learn'
 
 export interface DetectedObject {

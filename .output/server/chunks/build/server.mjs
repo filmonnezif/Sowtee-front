@@ -1,5 +1,5 @@
 import process from 'node:process';globalThis._importMeta_=globalThis._importMeta_||{url:"file:///_entry.js",env:process.env};import * as Vue from 'vue';
-import { inject, computed, hasInjectionContext, getCurrentInstance as getCurrentInstance$1, shallowRef, ref, reactive, effectScope, isRef, isReactive, toRaw, getCurrentScope, onScopeDispose, watch, nextTick, toRefs, markRaw, defineComponent, createElementBlock, provide, cloneVNode, h, useSlots, Fragment, defineAsyncComponent, unref, shallowReactive, Suspense, useSSRContext, createApp, createVNode, Text, withCtx, onErrorCaptured, onServerPrefetch, resolveDynamicComponent, mergeProps, toRef, toValue, isReadonly, isShallow } from 'vue';
+import { hasInjectionContext, inject, computed, getCurrentInstance as getCurrentInstance$1, shallowRef, ref, reactive, effectScope, isRef, isReactive, toRaw, getCurrentScope, onScopeDispose, watch, nextTick, toRefs, markRaw, defineComponent, createElementBlock, provide, cloneVNode, h, useSlots, Fragment, defineAsyncComponent, unref, shallowReactive, Suspense, useSSRContext, createApp, createVNode, Text, withCtx, onErrorCaptured, onServerPrefetch, resolveDynamicComponent, mergeProps, toRef, toValue, isReadonly, isShallow } from 'vue';
 import { r as hasProtocol, s as isScriptProtocol, o as joinURL, w as withQuery, t as sanitizeStatusCode, v as getContext, $ as $fetch$1, x as baseURL, y as defu, z as createHooks, l as createError$1, A as executeAsync, B as getRequestURL, C as getRequestHeader, D as getCookie, E as klona, F as destr, G as createDefu, H as parsePath, I as parseQuery, J as setCookie, K as deleteCookie, L as withoutTrailingSlash } from '../nitro/nitro.mjs';
 import { useRoute as useRoute$1, RouterView, createMemoryHistory, createRouter, START_LOCATION } from 'vue-router';
 import sync, { getFrameData } from 'framesync';
@@ -457,22 +457,32 @@ const _routes = [
   {
     name: "index",
     path: "/",
-    component: () => import('./index-DIakTorG.mjs')
+    component: () => import('./index-Dy6PX5S7.mjs')
   },
   {
     name: "profile",
     path: "/profile",
-    component: () => import('./profile-DeIQp1hb.mjs')
+    component: () => import('./profile-DUtf-Pag.mjs')
   },
   {
     name: "learning",
     path: "/learning",
-    component: () => import('./learning-CZ3bm67v.mjs')
+    component: () => import('./learning-BSsaMJ0Y.mjs')
   },
   {
     name: "speaking",
     path: "/speaking",
-    component: () => import('./speaking-C4vp3T8W.mjs')
+    component: () => import('./speaking-nhPB1asU.mjs')
+  },
+  {
+    name: "onboarding",
+    path: "/onboarding",
+    component: () => import('./onboarding-BFInINBx.mjs')
+  },
+  {
+    name: "calibration",
+    path: "/calibration",
+    component: () => import('./calibration-_fSLT8Rm.mjs')
   }
 ];
 const _wrapInTransition = (props, children) => {
@@ -3728,7 +3738,7 @@ function createNuxtI18nContext(nuxt, vueI18n, defaultLocale) {
       return;
     }
     const headers = getLocaleConfig(locale)?.cacheable ? {} : { "Cache-Control": "no-cache" };
-    const messages = await $fetch(`${"/_i18n/ShVuW817"}/${locale}/messages.json`, { headers });
+    const messages = await $fetch(`${"/_i18n/3PNSd_rm"}/${locale}/messages.json`, { headers });
     for (const k of Object.keys(messages)) {
       i18n.mergeLocaleMessage(k, messages[k]);
     }
@@ -7959,7 +7969,7 @@ const i18n_EI7LsD1KYQADczz5hrChviGQCdVM8yUkvFEZLJpmnvM = /* @__PURE__ */ defineN
     {
       localeConfigs.value = useRequestEvent().context.nuxtI18n?.localeConfigs || {};
     }
-    prerenderRoutes(localeCodes.map((locale) => `${"/_i18n/ShVuW817"}/${locale}/messages.json`));
+    prerenderRoutes(localeCodes.map((locale) => `${"/_i18n/3PNSd_rm"}/${locale}/messages.json`));
     const i18n = createI18n(optionsI18n);
     const detectors = useDetectors(useRequestEvent(nuxt), useI18nDetection(nuxt), nuxt);
     const ctx = createNuxtI18nContext(nuxt, i18n, optionsI18n.defaultLocale);
@@ -8051,7 +8061,7 @@ const plugins = [
   ssg_detect_IpHCGcQQ_IR5Rl99qyukWoMA9fJGfuTYyoksTzy81cs
 ];
 const layouts = {
-  default: defineAsyncComponent(() => import('./default-DNczbioV.mjs').then((m) => m.default || m))
+  default: defineAsyncComponent(() => import('./default-Cg7Pq1Eo.mjs').then((m) => m.default || m))
 };
 const routeRulesMatcher = _routeRulesMatcher;
 const LayoutLoader = defineComponent({
@@ -8295,10 +8305,13 @@ const useAppStore = /* @__PURE__ */ defineStore("app", {
     // 3 seconds
     showDebugInfo: false,
     language: "en",
+    preferredVoice: "male",
     // Eye Gaze
     eyeGazeOverlayActive: false,
     eyeGazeCalibrationActive: false,
     eyeGazeCalibrated: false,
+    eyeGazeCalibrationReturnTo: "/speaking",
+    eyeGazeCalibrationSource: null,
     dwellThreshold: 1500,
     // 1.5 seconds
     blinkDetectionEnabled: true,
@@ -8323,7 +8336,10 @@ const useAppStore = /* @__PURE__ */ defineStore("app", {
     },
     // Voice Clone
     clonedVoiceId: null,
-    clonedVoiceName: null
+    clonedVoiceName: null,
+    // Onboarding
+    hasCompletedOnboarding: false,
+    hasSkippedOnboarding: false
   }),
   getters: {
     topPhrase: (state) => state.predictedPhrases[0] || null,
@@ -8469,6 +8485,20 @@ const useAppStore = /* @__PURE__ */ defineStore("app", {
     setLanguage(lang) {
       this.language = lang;
     },
+    setPreferredVoice(voice) {
+      this.preferredVoice = voice;
+    },
+    completeOnboarding() {
+      this.hasCompletedOnboarding = true;
+      this.hasSkippedOnboarding = false;
+    },
+    skipOnboarding() {
+      this.hasSkippedOnboarding = true;
+    },
+    resetOnboarding() {
+      this.hasCompletedOnboarding = false;
+      this.hasSkippedOnboarding = false;
+    },
     setCaptureInterval(ms) {
       this.captureInterval = Math.max(1e3, Math.min(ms, 1e4));
     },
@@ -8489,11 +8519,17 @@ const useAppStore = /* @__PURE__ */ defineStore("app", {
     startCalibration() {
       this.eyeGazeCalibrationActive = true;
     },
+    setCalibrationContext(returnTo = "/speaking", source = null) {
+      this.eyeGazeCalibrationReturnTo = returnTo;
+      this.eyeGazeCalibrationSource = source;
+    },
     endCalibration(completed = false) {
       this.eyeGazeCalibrationActive = false;
       if (completed) {
         this.eyeGazeCalibrated = true;
       }
+      this.eyeGazeCalibrationReturnTo = "/speaking";
+      this.eyeGazeCalibrationSource = null;
     },
     resetCalibration() {
       this.eyeGazeCalibrated = false;
@@ -8599,7 +8635,7 @@ const _sfc_main$1 = {
     const statusText = _error.statusMessage ?? (is404 ? "Page Not Found" : "Internal Server Error");
     const description = _error.message || _error.toString();
     const stack = void 0;
-    const _Error404 = defineAsyncComponent(() => import('./error-404-CKDpqQHK.mjs'));
+    const _Error404 = defineAsyncComponent(() => import('./error-404-CM6SUtyo.mjs'));
     const _Error = defineAsyncComponent(() => import('./error-500-BrWqFk8Q.mjs'));
     const ErrorTemplate = is404 ? _Error404 : _Error;
     return (_ctx, _push, _parent, _attrs) => {
@@ -8681,5 +8717,5 @@ let entry;
 }
 const entry_default = ((ssrContext) => entry(ssrContext));
 
-export { useAppStore as a, useI18n as b, useRuntimeConfig as c, defineStore as d, entry_default as default, useNuxtApp as e, useRouter as f, nuxtLinkDefaults as g, navigateTo as n, resolveRouteObject as r, useHead as u };
+export { useAppStore as a, useI18n as b, useRuntimeConfig as c, defineStore as d, entry_default as default, useNuxtApp as e, useRoute as f, useRouter as g, nuxtLinkDefaults as h, navigateTo as n, resolveRouteObject as r, useHead as u };
 //# sourceMappingURL=server.mjs.map
