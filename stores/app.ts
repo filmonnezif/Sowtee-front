@@ -203,6 +203,11 @@ export const useAppStore = defineStore('app', {
   },
 
   actions: {
+    isMobileScreen() {
+      if (!import.meta.client) return false
+      return window.innerWidth <= 768
+    },
+
     initializeUserIdentity() {
       if (!import.meta.client) return
 
@@ -234,8 +239,12 @@ export const useAppStore = defineStore('app', {
       }
 
       const onboardingDone = this.hasCompletedOnboarding || this.hasSkippedOnboarding
+      const isMobile = this.isMobileScreen()
 
       if (!onboardingDone) {
+        this.interactionMode = 'touch'
+        localStorage.setItem('sowtee_interaction_mode', 'touch')
+      } else if (isMobile) {
         this.interactionMode = 'touch'
         localStorage.setItem('sowtee_interaction_mode', 'touch')
       } else if (storedInteractionMode === 'touch' || storedInteractionMode === 'eye_gaze' || storedInteractionMode === 'switch') {
@@ -371,10 +380,11 @@ export const useAppStore = defineStore('app', {
     },
 
     setInteractionMode(mode: InteractionMode) {
-      this.interactionMode = mode
+      const nextMode = this.isMobileScreen() ? 'touch' : mode
+      this.interactionMode = nextMode
 
       if (import.meta.client) {
-        localStorage.setItem('sowtee_interaction_mode', mode)
+        localStorage.setItem('sowtee_interaction_mode', nextMode)
       }
     },
 

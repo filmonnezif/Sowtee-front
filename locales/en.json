@@ -7,7 +7,7 @@
             "modes": {
                 "touch": "Touch",
                 "eyeGaze": "Eye Gaze",
-                "switch": "Switch"
+                "switch": "Arrow Keys"
             },
             "eyeGaze": {
                 "title": "Eye Gaze Settings",

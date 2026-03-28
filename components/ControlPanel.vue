@@ -4,7 +4,7 @@
  * Settings and mode controls for the AAC interface
  */
 
-import { Hand, Eye, ToggleRight, Lightbulb } from 'lucide-vue-next'
+import { Hand, Eye, Move, Lightbulb, HelpCircle } from 'lucide-vue-next'
 import type { InteractionMode } from '~/types/api'
 const appStore = useAppStore()
 const route = useRoute()
@@ -15,10 +15,10 @@ function buildCalibrationUrl(source: string) {
   return `/calibration?${params.toString()}`
 }
 
-const modes: Array<{ value: InteractionMode; label: string; icon: typeof Hand }> = [
-  { value: 'touch', label: 'Touch', icon: Hand },
-  { value: 'eye_gaze', label: 'Eye Gaze', icon: Eye },
-  { value: 'switch', label: 'Switch', icon: ToggleRight },
+const modes: Array<{ value: InteractionMode; label: string; description: string; icon: typeof Hand }> = [
+  { value: 'touch', label: 'Touch', description: 'Tap cards and buttons directly on screen. Works like any touchscreen app.', icon: Hand },
+  { value: 'eye_gaze', label: 'Eye Gaze', description: 'Look at a card and hold your gaze for a moment to select it. Fully hands-free.', icon: Eye },
+  { value: 'switch', label: 'Arrow Keys', description: 'Use ← → ↑ ↓ arrow keys to navigate between cards. Press Shift to select.', icon: Move },
 ]
 
 const { t } = useI18n()
@@ -69,6 +69,13 @@ async function startCalibration() {
           <component :is="mode.icon" :size="20" class="mb-0.5" />
           <span class="text-xs">{{ t(`settings.general.modes.${mode.value === 'eye_gaze' ? 'eyeGaze' : mode.value}`) }}</span>
         </button>
+      </div>
+
+      <div class="mt-3 flex items-start gap-1.5 rounded-lg border border-white/5 bg-aac-surface/50 px-3 py-2">
+        <HelpCircle :size="14" class="mt-0.5 flex-shrink-0 text-aac-highlight/70" />
+        <span class="text-xs leading-relaxed text-aac-muted">
+          {{ modes.find(m => m.value === appStore.interactionMode)?.description }}
+        </span>
       </div>
     </div>
     

@@ -21,7 +21,6 @@ const { t } = useI18n()
 // Refs for gaze targets
 const cardRefs = ref<(HTMLElement | null)[]>([])
 const speakBtnRef = ref<HTMLElement | null>(null)
-const textFieldAutocompleteRef = ref<HTMLElement | null>(null)
 const backspaceKeyRef = ref<HTMLElement | null>(null)
 const spaceKeyRef = ref<HTMLElement | null>(null)
 const suggestionChipRefs = ref<(HTMLElement | null)[]>([])
@@ -399,8 +398,6 @@ function handleGazeSelect(targetId: string) {
     handleSelect(index)
   } else if (targetId === 'speak-btn') {
     handleInlineSpeak()
-  } else if (targetId === 'text-field-autocomplete') {
-    handleAcceptGhostText()
   } else if (targetId === 'done-calibration') {
     completeCalibration()
   } else if (targetId === 'backspace-key') {
@@ -543,11 +540,11 @@ function registerGazeTargets() {
   // Register speak with higher priority
   if (speakBtnRef.value) {
     gazeController.registerTarget('speak-btn', speakBtnRef.value, 8, {
-      weight: 0.95,
-      paddingScale: 0.85,
+      weight: 1.45,
+      paddingScale: 1.2,
       hitBounds: getPreciseHitBounds(speakBtnRef.value, {
-        horizontalInsetRatio: 0.04,
-        verticalInsetRatio: 0.04,
+        horizontalInsetRatio: 0,
+        verticalInsetRatio: 0,
       }),
     })
   }
@@ -560,18 +557,6 @@ function registerGazeTargets() {
       hitBounds: getPreciseHitBounds(backspaceKeyRef.value, {
         horizontalInsetRatio: 0.06,
         verticalInsetRatio: 0.05,
-      }),
-    })
-  }
-  
-  // Register autocomplete zone on text field right half
-  if (textFieldAutocompleteRef.value) {
-    gazeController.registerTarget('text-field-autocomplete', textFieldAutocompleteRef.value, 7, {
-      weight: 0.9,
-      paddingScale: 0.75,
-      hitBounds: getPreciseHitBounds(textFieldAutocompleteRef.value, {
-        horizontalInsetRatio: 0.04,
-        verticalInsetRatio: 0.08,
       }),
     })
   }
@@ -603,7 +588,7 @@ function registerGazeTargets() {
 }
 
 // Watch for card refs changes to re-register targets
-watch([cardRefs, speakBtnRef, textFieldAutocompleteRef, backspaceKeyRef, spaceKeyRef, suggestionChipRefs, gazePauseToggleRef], () => {
+watch([cardRefs, speakBtnRef, backspaceKeyRef, spaceKeyRef, suggestionChipRefs, gazePauseToggleRef], () => {
   if (gazeController.state.isActive) {
     registerGazeTargets()
   }
@@ -1235,9 +1220,17 @@ watch(() => appStore.language, async (newLang) => {
       :visible="appStore.interactionMode === 'eye_gaze' && gazeController.state.isActive"
     />
 
-    <!-- Keyboard Navigation Hint -->
+    <!-- Input Mode Helper Banner -->
     <div v-if="!appStore.settingsExpanded && !speakingStore.showSuggestions" class="keyboard-nav-hint">
-      Use arrow keys to navigate • Shift to click • Tab to cycle
+      <template v-if="appStore.interactionMode === 'touch'">
+        Tap cards to build words • Tap Speak to say it aloud
+      </template>
+      <template v-else-if="appStore.interactionMode === 'eye_gaze'">
+        Look at a card and hold your gaze to select • Pause gaze via the button
+      </template>
+      <template v-else>
+        Arrow keys to navigate • Shift to select
+      </template>
     </div>
 
     <div v-if="speakingStore.isSpeaking" class="interaction-lock-overlay" aria-hidden="true" />
@@ -1278,10 +1271,8 @@ watch(() => appStore.language, async (newLang) => {
               <span class="text-field__cursor" />
             </div>
             <div
-              ref="textFieldAutocompleteRef"
               class="text-field__autocomplete-zone"
               :class="{
-                'text-field__autocomplete-zone--active': gazeController.state.currentTargetId === 'text-field-autocomplete',
                 'text-field__autocomplete-zone--available': !!speakingStore.predictiveGhostText,
                 'text-field__autocomplete-zone--rtl': isRtl
               }"
@@ -1316,7 +1307,7 @@ watch(() => appStore.language, async (newLang) => {
         <div class="speak-inline-stack">
           <button
             ref="speakBtnRef"
-            class="action-btn action-btn--speak action-btn--inline navigable-item"
+            class="action-btn action-btn--speak action-btn--inline action-btn--prominent navigable-item"
             :class="{
               'action-btn--loading': speakingStore.isSpeaking,
               'action-btn--speaking': speakingStore.isSpeaking,
@@ -2100,13 +2091,13 @@ watch(() => appStore.language, async (newLang) => {
 }
 
 .action-btn--inline {
-  @apply h-20 w-full;
+  @apply h-24 w-full;
   min-height: auto;
 }
 
 .speak-inline-stack {
   @apply flex flex-col items-center gap-1.5 flex-shrink-0;
-  width: 8rem;
+  width: 10rem;
 }
 
 .surrounding-voice-line {
@@ -2408,8 +2399,33 @@ watch(() => appStore.language, async (newLang) => {
   @apply bg-aac-highlight/10;
 }
 
+.action-btn--prominent {
+  border-bottom: none;
+  box-shadow:
+    0 7px 0 0 rgb(var(--aac-highlight) / 0.28),
+    0 12px 24px rgb(0 0 0 / 0.35),
+    inset 0 1px 0 rgb(255 255 255 / 0.12);
+}
+
+.action-btn--prominent:active:not(:disabled) {
+  transform: translateY(5px);
+  box-shadow:
+    0 2px 0 0 rgb(var(--aac-highlight) / 0.25),
+    0 4px 10px rgb(0 0 0 / 0.28),
+    inset 0 1px 0 rgb(255 255 255 / 0.08);
+}
+
 .action-btn--speak:hover:not(:disabled) {
   @apply bg-aac-highlight/30;
+}
+
+.action-btn--prominent.action-btn--gaze-active {
+  transform: scale(1.12);
+  box-shadow:
+    0 8px 0 0 rgb(var(--aac-highlight) / 0.34),
+    0 0 28px rgb(var(--aac-highlight) / 0.45),
+    0 14px 26px rgb(0 0 0 / 0.34),
+    inset 0 1px 0 rgb(255 255 255 / 0.14);
 }
 
 /* Context Bottom Section */
@@ -2583,7 +2599,7 @@ watch(() => appStore.language, async (newLang) => {
   }
 
   .speak-inline-stack {
-    width: 7rem;
+    width: 9rem;
   }
 
   .text-field {

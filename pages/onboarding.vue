@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UserRound, Hand, Eye, ToggleRight, Globe, Mic, Upload, Loader2, CheckCircle, ArrowRight, ArrowLeft } from 'lucide-vue-next'
+import { UserRound, Hand, Eye, Move, Globe, Mic, Upload, Loader2, CheckCircle, ArrowRight, ArrowLeft, HelpCircle } from 'lucide-vue-next'
 import type { InteractionMode, VoiceOption } from '~/types/api'
 
 const appStore = useAppStore()
@@ -18,10 +18,28 @@ const isCloning = ref(false)
 const cloneError = ref('')
 const fileInputRef = ref<HTMLInputElement | null>(null)
 
-const modeOptions: Array<{ value: InteractionMode; label: string; sub: string; icon: typeof Hand }> = [
-  { value: 'touch', label: 'Touch', sub: 'Best default for fast start', icon: Hand },
-  { value: 'eye_gaze', label: 'Eye Gaze', sub: 'Hands-free with gaze dwell', icon: Eye },
-  { value: 'switch', label: 'Switch', sub: 'Assistive switch input', icon: ToggleRight },
+const modeOptions: Array<{ value: InteractionMode; label: string; sub: string; description: string; icon: typeof Hand }> = [
+  {
+    value: 'touch',
+    label: 'Touch',
+    sub: 'Best default for fast start',
+    description: 'Tap cards and buttons directly on screen. Works like any touchscreen app — just tap what you want to say.',
+    icon: Hand,
+  },
+  {
+    value: 'eye_gaze',
+    label: 'Eye Gaze',
+    sub: 'Hands-free with gaze dwell',
+    description: 'Look at a card and hold your gaze for a moment to select it. Fully hands-free — requires webcam calibration.',
+    icon: Eye,
+  },
+  {
+    value: 'switch',
+    label: 'Arrow Keys',
+    sub: 'Navigate with arrow keys',
+    description: 'Use ← → ↑ ↓ arrow keys to move between cards. Press Shift to select the highlighted item.',
+    icon: Move,
+  },
 ]
 
 const languageOptions: Array<{ value: 'en' | 'ar' | 'ur'; label: string; sub: string }> = [
@@ -31,7 +49,7 @@ const languageOptions: Array<{ value: 'en' | 'ar' | 'ur'; label: string; sub: st
 ]
 
 const voiceOptions: Array<{ value: VoiceOption; label: string; sub: string; icon: typeof Mic }> = [
-  { value: 'cloned', label: 'My Cloned Voice', sub: 'Use your saved ElevenLabs voice clone', icon: Mic },
+  { value: 'cloned', label: 'My Voice Clone', sub: 'Speak with a voice that sounds like you', icon: Mic },
   { value: 'male', label: 'Adam (Male)', sub: 'Clear male voice', icon: Mic },
   { value: 'female', label: 'Rachel (Female)', sub: 'Warm female voice', icon: Mic },
 ]
@@ -46,7 +64,7 @@ const currentTitle = computed(() => {
 const currentHint = computed(() => {
   if (step.value === 0) return 'Optional. You can skip and start now.'
   if (step.value === 1) return 'Touch is preselected so you can move fast.'
-  if (step.value === 2) return 'Pick your speaking voice for text-to-speech.'
+  if (step.value === 2) return 'Pick a voice style — including a clone that sounds like you.'
   return 'You can change this later in settings.'
 })
 
@@ -61,7 +79,7 @@ function goBack() {
 function goNext() {
   if (step.value >= totalSteps - 1) return
   if (step.value === 2 && selectedVoice.value === 'cloned' && !appStore.clonedVoiceId) {
-    cloneError.value = 'Please upload a voice sample to use cloned voice.'
+    cloneError.value = 'Add a voice sample to use your voice clone.'
     return
   }
   step.value++
@@ -153,7 +171,7 @@ async function applyAndStart(markCompleted = true) {
   }
 
   if (selectedVoice.value === 'cloned' && !appStore.clonedVoiceId) {
-    cloneError.value = 'Please upload a voice sample to use cloned voice.'
+    cloneError.value = 'Add a voice sample to use your voice clone.'
     step.value = 2
     return
   }
@@ -165,6 +183,17 @@ async function applyAndStart(markCompleted = true) {
 
   if (markCompleted) {
     markOnboardingCompleted()
+  }
+
+  if (selectedMode.value === 'eye_gaze') {
+    await navigateTo({
+      path: '/calibration',
+      query: {
+        returnTo: '/speaking',
+        source: 'onboarding',
+      },
+    })
+    return
   }
 
   await navigateTo('/speaking')
@@ -253,6 +282,17 @@ watch(selectedVoice, (voice) => {
               <p>{{ mode.sub }}</p>
             </div>
           </button>
+
+          <!-- How it works helper for selected mode -->
+          <div class="onboarding-helper">
+            <div class="onboarding-helper__header">
+              <HelpCircle :size="14" />
+              <span>How it works</span>
+            </div>
+            <p class="onboarding-helper__text">
+              {{ modeOptions.find(m => m.value === selectedMode)?.description }}
+            </p>
+          </div>
         </div>
 
         <div v-else-if="step === 2" class="onboarding-content onboarding-options">
@@ -275,11 +315,11 @@ watch(selectedVoice, (voice) => {
           <div v-if="selectedVoice === 'cloned'" class="onboarding-clone-block">
             <div v-if="appStore.clonedVoiceId" class="onboarding-clone-success">
               <CheckCircle :size="16" class="text-green-400" />
-              <span>{{ appStore.clonedVoiceName || 'My Voice' }} is ready</span>
+              <span>{{ appStore.clonedVoiceName || 'My Voice' }} is ready to speak</span>
             </div>
 
             <div v-else class="onboarding-clone-upload">
-              <p class="onboarding-microcopy">Upload a 10–30 second audio sample to create your cloned voice.</p>
+              <p class="onboarding-microcopy">Upload a short 10–30 second sample, and we’ll create a voice clone that sounds like you.</p>
 
               <input
                 ref="fileInputRef"
@@ -291,13 +331,13 @@ watch(selectedVoice, (voice) => {
 
               <button class="onboarding-upload-btn" @click="fileInputRef?.click()">
                 <Upload :size="16" />
-                <span>{{ voiceCloneFile ? voiceCloneFile.name : 'Choose audio file' }}</span>
+                <span>{{ voiceCloneFile ? voiceCloneFile.name : 'Choose voice sample' }}</span>
               </button>
 
               <button class="onboarding-primary onboarding-clone-btn" :disabled="!voiceCloneFile || isCloning" @click="uploadVoiceClone">
                 <Loader2 v-if="isCloning" :size="16" class="animate-spin" />
                 <Upload v-else :size="16" />
-                <span>{{ isCloning ? 'Cloning...' : 'Clone voice' }}</span>
+                <span>{{ isCloning ? 'Creating your clone...' : 'Create voice clone' }}</span>
               </button>
 
               <p v-if="cloneError" class="onboarding-error">{{ cloneError }}</p>
@@ -447,6 +487,24 @@ watch(selectedVoice, (voice) => {
 
 .onboarding-option__text p {
   @apply text-sm text-aac-muted;
+}
+
+.onboarding-helper {
+  @apply mt-4 rounded-xl border border-aac-highlight/20 bg-aac-highlight/5 p-4;
+  animation: helper-fade-in 0.3s ease;
+}
+
+.onboarding-helper__header {
+  @apply mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-aac-highlight;
+}
+
+.onboarding-helper__text {
+  @apply text-sm leading-relaxed text-aac-muted;
+}
+
+@keyframes helper-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .onboarding-actions {

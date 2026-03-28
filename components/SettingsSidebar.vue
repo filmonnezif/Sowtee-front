@@ -4,7 +4,7 @@
  * Essentials-only settings sidebar
  */
 
-import { X, Languages, Mic, Hand, Eye, ToggleRight, Radio, Upload, CheckCircle, Trash2, Loader2 } from 'lucide-vue-next'
+import { X, Languages, Mic, Hand, Eye, Move, Radio, Upload, CheckCircle, Trash2, Loader2, HelpCircle } from 'lucide-vue-next'
 import type { InteractionMode, VoiceOption } from '~/types/api'
 
 const appStore = useAppStore()
@@ -22,11 +22,12 @@ const voiceCloneFile = ref<File | null>(null)
 const isCloning = ref(false)
 const cloneError = ref('')
 const fileInputRef = ref<HTMLInputElement | null>(null)
+const isMobile = ref(false)
 
-const modes: Array<{ value: InteractionMode; label: string; icon: typeof Hand }> = [
-  { value: 'touch', label: 'Touch', icon: Hand },
-  { value: 'eye_gaze', label: 'Eye Gaze', icon: Eye },
-  { value: 'switch', label: 'Switch', icon: ToggleRight },
+const modes: Array<{ value: InteractionMode; label: string; description: string; icon: typeof Hand }> = [
+  { value: 'touch', label: 'Touch', description: 'Tap cards and buttons directly on screen.', icon: Hand },
+  { value: 'eye_gaze', label: 'Eye Gaze', description: 'Look at a card and hold your gaze to select it. Requires webcam.', icon: Eye },
+  { value: 'switch', label: 'Arrows', description: 'Use arrow keys to navigate, Shift to select.', icon: Move },
 ]
 
 const voiceOptions: Array<{ value: VoiceOption; label: string }> = [
@@ -40,6 +41,11 @@ const languages = [
   { code: 'ar', name: 'Arabic' },
   { code: 'ur', name: 'Urdu' },
 ]
+
+function detectMobile() {
+  if (!import.meta.client) return
+  isMobile.value = window.innerWidth <= 768
+}
 
 function closeSettings() {
   appStore.setSettingsExpanded(false)
@@ -176,6 +182,11 @@ function setVoice(voice: VoiceOption) {
 }
 
 onMounted(async () => {
+  detectMobile()
+  if (import.meta.client) {
+    window.addEventListener('resize', detectMobile)
+  }
+
   if (import.meta.client) {
     listeningManuallyDisabled.value = localStorage.getItem(LISTENING_PAUSED_KEY) === 'true'
   }
@@ -184,6 +195,12 @@ onMounted(async () => {
     syncVoiceCloneStatus(),
     ensureListeningActive(),
   ])
+})
+
+onBeforeUnmount(() => {
+  if (import.meta.client) {
+    window.removeEventListener('resize', detectMobile)
+  }
 })
 
 watch(
@@ -217,7 +234,7 @@ watch(
       </button>
     </div>
 
-    <div class="settings-section settings-section--compact">
+    <div v-if="!isMobile" class="settings-section settings-section--compact">
       <div class="settings-section__header">
         <Hand :size="16" class="text-aac-highlight" />
         <span>Input method</span>
@@ -233,6 +250,11 @@ watch(
           <component :is="mode.icon" :size="14" />
           <span>{{ mode.label }}</span>
         </button>
+      </div>
+
+      <div class="settings-mode-helper">
+        <HelpCircle :size="12" class="settings-mode-helper__icon" />
+        <span>{{ modes.find(m => m.value === appStore.interactionMode)?.description }}</span>
       </div>
     </div>
 
@@ -487,5 +509,13 @@ watch(
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
+}
+
+.settings-mode-helper {
+  @apply mt-2 flex items-start gap-1.5 text-[11px] leading-relaxed text-aac-muted/80;
+}
+
+.settings-mode-helper__icon {
+  @apply mt-0.5 flex-shrink-0 text-aac-highlight/60;
 }
 </style>
